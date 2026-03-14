@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+/* ========================================================================
+   Maventor Design Tokens – derived from docs/styleGuide.html
+   Tailwind v4 CSS-first configuration
+   ======================================================================== */
+
+/* ---------- Light theme (default) ---------- */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --bg: #f4f7f8;
+  --surface: #ffffff;
+  --surface-muted: #ebf1f3;
+
+  /* Text */
+  --text: #0f1f26;
+  --text-muted: #4c6572;
+
+  /* Brand */
+  --brand: #0d8a72;
+  --brand-strong: #0b6f5d;
+
+  /* Accent & Danger */
+  --accent: #f29f05;
+  --danger: #d9472f;
+
+  /* Borders & Focus */
+  --border: #cfdde3;
+  --ring: rgba(13, 138, 114, 0.35);
+
+  /* Elevation */
+  --shadow: 0 8px 28px rgba(8, 34, 45, 0.08);
+
+  /* Shape */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-lg: 18px;
+
+  /* Spacing scale (8-point based) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+}
+
+/* ---------- Dark theme ---------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1a20;
+  --surface: #12262f;
+  --surface-muted: #1a3642;
+  --text: #e4f0f4;
+  --text-muted: #aac2cd;
+  --brand: #1ab394;
+  --brand-strong: #14967c;
+  --accent: #f3b64b;
+  --danger: #ee6d54;
+  --border: #2d4a56;
+  --ring: rgba(26, 179, 148, 0.4);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- Tailwind v4 @theme inline ---------- */
+@theme inline {
+  /* Colors */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-text-primary: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+
+  /* Fonts */
+  --font-heading: "Sora", "Trebuchet MS", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Tahoma, sans-serif;
+
+  /* Border Radius */
+  --radius-sm: var(--radius-sm);
+  --radius-DEFAULT: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --radius-full: 999px;
+}
+
+/* ---------- Base Resets ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 5% 0%, rgba(13, 138, 114, 0.12), transparent 35%),
+    radial-gradient(circle at 100% 20%, rgba(242, 159, 5, 0.12), transparent 30%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Focus ring utility ---------- */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+/* ---------- Reveal animation ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  animation: revealUp 600ms ease forwards;
+}
+
+.reveal:nth-child(2) { animation-delay: 50ms; }
+.reveal:nth-child(3) { animation-delay: 100ms; }
+.reveal:nth-child(4) { animation-delay: 150ms; }
+.reveal:nth-child(5) { animation-delay: 200ms; }
+
+@keyframes revealUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------- Scrollbar polish ---------- */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
