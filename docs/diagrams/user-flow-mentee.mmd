@@ -1,0 +1,22 @@
+flowchart TD
+  Start([Enter Maventor]) --> Landing[Open Mentee Dashboard]
+  Landing --> HasProfile{Profile complete?}
+  HasProfile -- No --> Profile[Complete Mentee Profile]
+  Profile --> SaveProfile[Save Skills and Goals]
+  SaveProfile --> WaitPairing[Wait for Officer Pairing]
+  HasProfile -- Yes --> PairCheck{Pairing assigned?}
+  WaitPairing --> PairCheck
+
+  PairCheck -- No --> PairingPending[View Pending Status]
+  PairingPending --> RefreshStatus[Refresh or return later]
+  RefreshStatus --> PairCheck
+
+  PairCheck -- Yes --> ActivePair[Open Active Pairing]
+  ActivePair --> Chat[Send and Read Messages]
+  ActivePair --> Goals[Create or Update Milestones]
+  ActivePair --> CheckIn[Submit Reflection Check-In]
+  CheckIn --> Survey[Complete Pulse Survey]
+  Survey --> Progress[View Progress and Compatibility Trend]
+  Goals --> Progress
+  Chat --> Progress
+  Progress --> End([Continue Mentorship Cycle])

@@ -1,0 +1,17 @@
+stateDiagram-v2
+  [*] --> PendingMatch: pairing_request_created
+  PendingMatch --> Suggested: compatibility_score_generated
+  Suggested --> Active: officer_approves_pairing
+  Suggested --> PendingMatch: officer_revises_candidates
+
+  Active --> AtRisk: low_engagement_detected
+  Active --> Paused: temporarily_paused
+  Active --> Completed: goals_met_and_closed
+
+  AtRisk --> Active: intervention_successful
+  AtRisk --> Paused: unresolved_conflicts
+
+  Paused --> Active: resumed_by_officer
+  Paused --> Completed: closed_without_resume
+
+  Completed --> [*]

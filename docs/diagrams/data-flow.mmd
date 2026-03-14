@@ -1,0 +1,86 @@
+flowchart LR
+  %% Maventor MVP data flow for a single-club pilot
+
+  subgraph Actors
+    Mentee[Mentee]
+    Mentor[Mentor]
+    Officer[Club Officer]
+  end
+
+  subgraph WebApp[Maventor Web App]
+    UI[Role Dashboard UI]
+    ProfileForm[Profile Forms]
+    PairingPanel[Pairing Manager]
+    ChatUI[Direct Messaging]
+    GoalUI[Goals and Milestones]
+    CheckInUI[Check-In Form]
+  end
+
+  subgraph Services[Application Services]
+    ProfileService[Profile Service]
+    PairingService[Pairing Service]
+    MessagingService[Messaging Service]
+    GoalService[Goal Service]
+    CheckInService[Check-In Service]
+    CompatibilityEngine[Compatibility Scoring Engine]
+    AnalyticsService[Analytics Aggregator]
+  end
+
+  subgraph DataStores[Data Stores]
+    Users[(users)]
+    Profiles[(profiles)]
+    Pairings[(pairings)]
+    Messages[(messages)]
+    Goals[(goals)]
+    CheckIns[(check_ins)]
+    Surveys[(surveys)]
+    Compatibility[(compatibility_scores)]
+    Metrics[(analytics_snapshots)]
+  end
+
+  subgraph Outputs[Officer Insights]
+    Dashboard[Analytics Dashboard]
+    KpiMeetings[Meeting Frequency KPI]
+    KpiSurvey[Survey Sentiment KPI]
+    KpiCompat[Compatibility Trend KPI]
+  end
+
+  Mentee -->|submit_profile| ProfileForm
+  Mentor -->|submit_profile| ProfileForm
+  Officer -->|create_pairing| PairingPanel
+  Mentee -->|send_message| ChatUI
+  Mentor -->|send_message| ChatUI
+  Mentee -->|update_goal| GoalUI
+  Mentor -->|provide_feedback| CheckInUI
+
+  ProfileForm --> ProfileService
+  PairingPanel --> PairingService
+  ChatUI --> MessagingService
+  GoalUI --> GoalService
+  CheckInUI --> CheckInService
+
+  ProfileService --> Users
+  ProfileService --> Profiles
+  PairingService --> Pairings
+  MessagingService --> Messages
+  GoalService --> Goals
+  CheckInService --> CheckIns
+  CheckInService --> Surveys
+
+  PairingService -->|calculate_score| CompatibilityEngine
+  CompatibilityEngine --> Compatibility
+
+  CheckIns --> AnalyticsService
+  Surveys --> AnalyticsService
+  Compatibility --> AnalyticsService
+  Messages --> AnalyticsService
+  Pairings --> AnalyticsService
+
+  AnalyticsService --> Metrics
+  AnalyticsService --> Dashboard
+  Dashboard --> KpiMeetings
+  Dashboard --> KpiSurvey
+  Dashboard --> KpiCompat
+
+  ProfileService -.->|profile_change_recompute| CompatibilityEngine
+  CheckInService -.->|new_checkin_refresh_metrics| AnalyticsService
