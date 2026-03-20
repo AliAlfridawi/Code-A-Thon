@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --font-headline: "Manrope", sans-serif;
+  --font-sans: "Inter", sans-serif;
+
+  --color-surface: #f7f9fb;
+  --color-surface-container-low: #f2f4f6;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #e6e8ea;
+  --color-surface-container-highest: #e0e3e5;
+  
+  --color-primary: #002045;
+  --color-primary-container: #1a365d;
+  --color-on-primary: #ffffff;
+  --color-on-surface: #191c1e;
+  --color-on-surface-variant: #43474e;
+  
+  --color-primary-fixed: #d6e3ff;
+  --color-on-primary-fixed: #001b3c;
+  
+  --color-outline-variant: #c4c6cf;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+}
+
+@layer base {
+  body {
+    @apply bg-surface font-sans text-on-surface antialiased;
+  }
+
+  * {
+    @apply transition-colors duration-200;
+  }
+
+  ::selection {
+    background-color: #d6e3ff;
+    color: #001b3c;
+  }
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-surface-container-highest);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline-variant);
+}
+
+/* Shadows */
+.tonal-depth-shadow {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.04);
+}
+
+.ambient-shadow {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
+}
+
+/* Focus styles */
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(0, 32, 69, 0.1);
+}
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Button press feedback */
+button:active {
+  transition: transform 0.1s ease;
+}
+
+/* Skeleton loading animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--color-surface-container-high) 25%,
+    var(--color-surface-container-highest) 50%,
+    var(--color-surface-container-high) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
