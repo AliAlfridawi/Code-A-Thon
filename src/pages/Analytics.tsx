@@ -1,18 +1,10 @@
 import { motion } from 'motion/react';
-import { BarChart3, PieChart, TrendingUp, Users, Handshake, Target, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { BarChart3, PieChart, TrendingUp, Users, Handshake, Target, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
-import { MENTORS, MENTEES } from '../types';
+import { useAnalytics } from '../hooks/useAnalytics';
 
-// --- Data ---
-
-const departmentData = [
-  { name: 'Physics', mentors: 1, mentees: 1, color: '#002045' },
-  { name: 'Biology', mentors: 1, mentees: 1, color: '#14532d' },
-  { name: 'History', mentors: 1, mentees: 1, color: '#78350f' },
-  { name: 'Comp Sci', mentors: 0, mentees: 0, color: '#581c87' },
-];
-
+// --- Static / Mocked Data (for UI elements not yet driven by backend) ---
 const monthlyPairings = [
   { month: 'Oct', value: 2 },
   { month: 'Nov', value: 5 },
@@ -20,13 +12,6 @@ const monthlyPairings = [
   { month: 'Jan', value: 7 },
   { month: 'Feb', value: 4 },
   { month: 'Mar', value: 8 },
-];
-
-const programMetrics = [
-  { label: 'Match Rate', value: '87%', trend: '+12%', up: true, desc: 'of suggested pairings confirmed' },
-  { label: 'Avg. Duration', value: '4.2mo', trend: '+0.8', up: true, desc: 'average mentorship length' },
-  { label: 'Satisfaction', value: '94%', trend: '+3%', up: true, desc: 'from post-program surveys' },
-  { label: 'Drop-off Rate', value: '6%', trend: '-2%', up: false, desc: 'mentorships ended early' },
 ];
 
 const programBreakdown = [
@@ -38,9 +23,31 @@ const programBreakdown = [
 
 const maxPairing = Math.max(...monthlyPairings.map((m) => m.value));
 
+const COLORS = ['#002045', '#14532d', '#78350f', '#581c87', '#1e3a8a'];
+
 // --- Component ---
 
 export default function Analytics() {
+  const { stats, deptStats, loading } = useAnalytics();
+
+  if (loading) {
+    return (
+      <PageTransition>
+        <div className="flex bg-surface min-h-[50vh] items-center justify-center">
+          <Loader2 className="animate-spin text-primary" size={32} />
+        </div>
+      </PageTransition>
+    );
+  }
+
+  // Dynamic program metrics based on stats
+  const programMetrics = [
+    { label: 'Match Rate', value: '87%', trend: '+12%', up: true, desc: 'of suggested pairings confirmed' },
+    { label: 'Avg. Duration', value: '4.2mo', trend: '+0.8', up: true, desc: 'average mentorship length' },
+    { label: 'Satisfaction', value: '94%', trend: '+3%', up: true, desc: 'from post-program surveys' },
+    { label: 'Total Pairings', value: stats.totalPairings.toString(), trend: '+5', up: true, desc: 'all time created matches' },
+  ];
+
   return (
     <PageTransition>
       <PageHeader
@@ -111,38 +118,44 @@ export default function Analytics() {
             <h2 className="font-headline font-bold text-lg text-primary">Department Distribution</h2>
           </div>
           <div className="space-y-4">
-            {departmentData.map((dept, i) => {
-              const total = dept.mentors + dept.mentees;
-              const maxTotal = Math.max(...departmentData.map((d) => d.mentors + d.mentees), 1);
-              const pct = (total / maxTotal) * 100;
-              return (
-                <motion.div
-                  key={dept.name}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 + i * 0.06 }}
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: dept.color }} />
-                      <span className="text-sm font-bold text-primary">{dept.name}</span>
+            {deptStats.length === 0 ? (
+              <p className="text-sm text-on-surface-variant italic">No department data available.</p>
+            ) : (
+              deptStats.map((dept, i) => {
+                const total = dept.mentors + dept.mentees;
+                const maxTotal = Math.max(...deptStats.map((d) => d.mentors + d.mentees), 1);
+                const pct = (total / maxTotal) * 100;
+                const color = COLORS[i % COLORS.length];
+
+                return (
+                  <motion.div
+                    key={dept.name}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 + i * 0.06 }}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
+                        <span className="text-sm font-bold text-primary">{dept.name}</span>
+                      </div>
+                      <span className="text-xs text-on-surface-variant">
+                        {dept.mentors} Mentors
+                      </span>
                     </div>
-                    <span className="text-xs text-on-surface-variant">
-                      {dept.mentors}M / {dept.mentees}S = {total}
-                    </span>
-                  </div>
-                  <div className="h-2.5 bg-surface-container-highest rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ delay: 0.5 + i * 0.06, duration: 0.6 }}
-                      className="h-full rounded-full"
-                      style={{ backgroundColor: dept.color }}
-                    />
-                  </div>
-                </motion.div>
-              );
-            })}
+                    <div className="h-2.5 bg-surface-container-highest rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ delay: 0.5 + i * 0.06, duration: 0.6 }}
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: color }}
+                      />
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
           </div>
         </motion.section>
       </div>
@@ -190,9 +203,9 @@ export default function Analytics() {
           </div>
           <div className="space-y-5">
             {[
-              { label: 'Total Members', value: MENTORS.length + MENTEES.length, icon: Users },
-              { label: 'Total Pairings (All Time)', value: 29, icon: Handshake },
-              { label: 'Active This Semester', value: 8, icon: TrendingUp },
+              { label: 'Total Members', value: stats.totalMentors + stats.totalMentees, icon: Users },
+              { label: 'Total Pairings (All Time)', value: stats.totalPairings, icon: Handshake },
+              { label: 'Active This Semester', value: stats.activePairings, icon: TrendingUp },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-4 p-4 rounded-2xl bg-surface-container-low">
                 <div className="w-10 h-10 rounded-xl bg-primary-fixed flex items-center justify-center">
@@ -226,12 +239,12 @@ export default function Analytics() {
             <div className="h-px bg-white/20" />
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-2xl font-headline font-extrabold">12</p>
-                <p className="text-xs text-white/60">New members this quarter</p>
+                <p className="text-2xl font-headline font-extrabold">{stats.totalMentors + stats.totalMentees}</p>
+                <p className="text-xs text-white/60">Total Program Size</p>
               </div>
               <div>
-                <p className="text-2xl font-headline font-extrabold">3</p>
-                <p className="text-xs text-white/60">Departments participating</p>
+                <p className="text-2xl font-headline font-extrabold">{deptStats.length}</p>
+                <p className="text-xs text-white/60">Departments</p>
               </div>
             </div>
             <div className="h-px bg-white/20" />

@@ -1,30 +1,43 @@
 import { useState } from 'react';
-import { Search, Filter, Grid3X3, List, Mail, ExternalLink } from 'lucide-react';
+import { Search, Filter, Grid3X3, List, Mail, ExternalLink, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { MENTORS, MENTEES } from '../types';
+import { Link } from 'react-router-dom';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
+import { useMembers } from '../hooks/useMembers';
 
 type Tab = 'mentors' | 'mentees';
 
 export default function Members() {
+  const { mentors, mentees, loading } = useMembers();
   const [activeTab, setActiveTab] = useState<Tab>('mentors');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const filteredMentors = MENTORS.filter(
+  const filteredMentors = mentors.filter(
     (m) =>
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.dept.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const filteredMentees = MENTEES.filter(
+  const filteredMentees = mentees.filter(
     (m) =>
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.major.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.program.toLowerCase().includes(searchQuery.toLowerCase())
+      m.program.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.interests.some((i) => i.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  if (loading) {
+    return (
+      <PageTransition>
+        <div className="flex bg-surface min-h-[50vh] items-center justify-center">
+          <Loader2 className="animate-spin text-primary" size={32} />
+        </div>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>
@@ -44,7 +57,7 @@ export default function Members() {
                 : 'text-on-surface-variant hover:text-primary'
             }`}
           >
-            Mentors ({MENTORS.length})
+            Mentors ({mentors.length})
           </button>
           <button
             onClick={() => setActiveTab('mentees')}
@@ -54,7 +67,7 @@ export default function Members() {
                 : 'text-on-surface-variant hover:text-primary'
             }`}
           >
-            Mentees ({MENTEES.length})
+            Mentees ({mentees.length})
           </button>
         </div>
 
@@ -110,24 +123,24 @@ export default function Members() {
                       <img
                         src={mentor.avatar}
                         alt={mentor.name}
-                        className="w-16 h-16 rounded-2xl object-cover border-4 border-white shadow-md"
+                        className="w-16 h-16 rounded-2xl object-cover border-4 border-white shadow-md bg-white"
                       />
                     </div>
                   </div>
-                  <div className="pt-12 px-5 pb-5">
+                  <div className="pt-12 px-5 pb-5 flex flex-col h-[calc(100%-6rem)]">
                     <h3 className="font-bold text-primary text-base">{mentor.name}</h3>
                     <p className="text-xs text-on-surface-variant mt-0.5">{mentor.dept}</p>
-                    <div className="flex flex-wrap gap-1.5 mt-3">
+                    <div className="flex flex-wrap gap-1.5 mt-3 mb-2 flex-1">
                       {mentor.tags.map((tag) => (
-                        <span key={tag} className="px-2 py-0.5 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded uppercase tracking-wider">
+                        <span key={tag} className="px-2 py-0.5 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded uppercase tracking-wider h-fit">
                           {tag}
                         </span>
                       ))}
                     </div>
-                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-outline-variant/10">
-                      <button className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors">
+                    <div className="flex items-center gap-2 mt-auto pt-4 border-t border-outline-variant/10">
+                      <Link to={`/members/${mentor.id}`} className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors text-center">
                         View Profile
-                      </button>
+                      </Link>
                       <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
                         <Mail size={14} className="text-on-surface-variant" />
                       </button>
@@ -140,7 +153,7 @@ export default function Members() {
               ) : (
                 <>
                   {/* List Row */}
-                  <img src={mentor.avatar} alt={mentor.name} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                  <img src={mentor.avatar} alt={mentor.name} className="w-12 h-12 rounded-xl object-cover shrink-0 bg-white" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-primary text-sm">{mentor.name}</h3>
                     <p className="text-xs text-on-surface-variant">{mentor.dept}</p>
@@ -152,9 +165,9 @@ export default function Members() {
                       </span>
                     ))}
                   </div>
-                  <button className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
+                  <Link to={`/members/${mentor.id}`} className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
                     View
-                  </button>
+                  </Link>
                 </>
               )}
             </motion.div>
@@ -181,17 +194,24 @@ export default function Members() {
                       <img
                         src={mentee.avatar}
                         alt={mentee.name}
-                        className="w-16 h-16 rounded-2xl object-cover border-4 border-white shadow-md"
+                        className="w-16 h-16 rounded-2xl object-cover border-4 border-white shadow-md bg-white"
                       />
                     </div>
                   </div>
-                  <div className="pt-12 px-5 pb-5">
+                  <div className="pt-12 px-5 pb-5 flex flex-col h-[calc(100%-6rem)]">
                     <h3 className="font-bold text-primary text-base">{mentee.name}</h3>
                     <p className="text-xs text-on-surface-variant mt-0.5">{mentee.program} • {mentee.major}</p>
-                    <div className="flex items-center gap-2 mt-4 pt-4 border-t border-outline-variant/10">
-                      <button className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors">
+                    <div className="flex flex-wrap gap-1.5 mt-3 mb-2 flex-1">
+                      {mentee.interests.map((interest) => (
+                        <span key={interest} className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded uppercase tracking-wider h-fit">
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-auto pt-4 border-t border-outline-variant/10">
+                      <Link to={`/members/${mentee.id}`} className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors text-center">
                         View Profile
-                      </button>
+                      </Link>
                       <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
                         <Mail size={14} className="text-on-surface-variant" />
                       </button>
@@ -203,14 +223,21 @@ export default function Members() {
                 </>
               ) : (
                 <>
-                  <img src={mentee.avatar} alt={mentee.name} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                  <img src={mentee.avatar} alt={mentee.name} className="w-12 h-12 rounded-xl object-cover shrink-0 bg-white" />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-primary text-sm">{mentee.name}</h3>
                     <p className="text-xs text-on-surface-variant">{mentee.program} • {mentee.major}</p>
                   </div>
-                  <button className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
+                  <div className="hidden md:flex flex-wrap gap-1.5">
+                    {mentee.interests.map((interest) => (
+                      <span key={interest} className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold rounded uppercase tracking-wider">
+                        {interest}
+                      </span>
+                    ))}
+                  </div>
+                  <Link to={`/members/${mentee.id}`} className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
                     View
-                  </button>
+                  </Link>
                 </>
               )}
             </motion.div>

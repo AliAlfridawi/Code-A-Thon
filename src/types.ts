@@ -1,68 +1,44 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import type { Database } from './types/database.types';
 
+// Export convenience types based on the Supabase schema
+export type MentorRow = Database['public']['Tables']['mentors']['Row'];
+export type MenteeRow = Database['public']['Tables']['mentees']['Row'];
+export type PairingRow = Database['public']['Tables']['pairings']['Row'];
+export type ConversationRow = Database['public']['Tables']['conversations']['Row'];
+export type ConversationMemberRow = Database['public']['Tables']['conversation_members']['Row'];
+export type MessageRow = Database['public']['Tables']['messages']['Row'];
+export type ActivityLogRow = Database['public']['Tables']['activity_log']['Row'];
+export type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
+
+/**
+ * Standard Mentor interface adapted from DB row
+ */
 export interface Mentor {
   id: string;
   name: string;
   dept: string;
-  avatar: string;
+  avatar: string; // mapped from avatar_url
   tags: string[];
 }
 
+/**
+ * Standard Mentee interface adapted from DB row
+ */
 export interface Mentee {
   id: string;
   name: string;
   program: string;
   major: string;
-  avatar: string;
+  avatar: string; // mapped from avatar_url
+  interests: string[];
 }
 
-export const MENTORS: Mentor[] = [
-  {
-    id: 'm1',
-    name: 'Dr. Julian Sterling',
-    dept: 'Dept. of Theoretical Physics',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150&h=150',
-    tags: ['Quantum Mechanics', 'Ethics'],
-  },
-  {
-    id: 'm2',
-    name: 'Prof. Elena Vance',
-    dept: 'Molecular Biology Faculty',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150&h=150',
-    tags: ['Genomics', 'Lab Mgmt'],
-  },
-  {
-    id: 'm3',
-    name: 'Dr. Marcus Thorne',
-    dept: 'Ancient History Chair',
-    avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=150&h=150',
-    tags: ['Latin', 'Archiving'],
-  },
-];
-
-export const MENTEES: Mentee[] = [
-  {
-    id: 's1',
-    name: 'Liam Carter',
-    program: 'PhD Candidate',
-    major: 'Physics',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150&h=150',
-  },
-  {
-    id: 's2',
-    name: 'Sarah Jenkins',
-    program: 'Masters',
-    major: 'Biology',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150&h=150',
-  },
-  {
-    id: 's3',
-    name: 'David Chen',
-    program: 'PhD Candidate',
-    major: 'History',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150',
-  },
-];
+export interface ExtendedProfile {
+  bio: string;
+  email: string;
+  office: string;
+  researchInterests: string[];
+  publications: Array<{ title: string; journal: string; year: number }>;
+  availability: Array<{ day: string; hours: string }>;
+  joinedDate: string;
+}

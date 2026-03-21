@@ -1,83 +1,12 @@
-import { Users, UserPlus, Handshake, Clock, ArrowRight, Activity } from 'lucide-react';
+import { Users, UserPlus, Handshake, Clock, ArrowRight, Activity, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { MENTORS, MENTEES } from '../types';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
-
-const stats = [
-  {
-    label: 'Total Mentors',
-    value: MENTORS.length,
-    icon: Users,
-    gradient: 'from-[#002045] to-[#1a365d]',
-    iconBg: 'bg-[#d6e3ff]',
-    iconColor: 'text-[#001b3c]',
-  },
-  {
-    label: 'Total Mentees',
-    value: MENTEES.length,
-    icon: UserPlus,
-    gradient: 'from-[#1a365d] to-[#2a4a7f]',
-    iconBg: 'bg-[#d6e3ff]',
-    iconColor: 'text-[#001b3c]',
-  },
-  {
-    label: 'Active Pairings',
-    value: 2,
-    icon: Handshake,
-    gradient: 'from-[#0d3b2e] to-[#14532d]',
-    iconBg: 'bg-[#d1fae5]',
-    iconColor: 'text-[#064e3b]',
-  },
-  {
-    label: 'Pending Matches',
-    value: 4,
-    icon: Clock,
-    gradient: 'from-[#78350f] to-[#92400e]',
-    iconBg: 'bg-[#fef3c7]',
-    iconColor: 'text-[#78350f]',
-  },
-];
-
-const recentActivity = [
-  {
-    id: 1,
-    action: 'New pairing created',
-    detail: 'Dr. Julian Sterling ↔ Liam Carter',
-    time: '2 hours ago',
-    type: 'pairing' as const,
-  },
-  {
-    id: 2,
-    action: 'Mentee registered',
-    detail: 'Sarah Jenkins joined as a Masters student',
-    time: '5 hours ago',
-    type: 'registration' as const,
-  },
-  {
-    id: 3,
-    action: 'Profile updated',
-    detail: 'Prof. Elena Vance added new expertise tags',
-    time: '1 day ago',
-    type: 'update' as const,
-  },
-  {
-    id: 4,
-    action: 'Meeting scheduled',
-    detail: 'Dr. Marcus Thorne & David Chen — Initial consultation',
-    time: '2 days ago',
-    type: 'meeting' as const,
-  },
-  {
-    id: 5,
-    action: 'Pairing completed',
-    detail: 'Prof. Elena Vance ↔ Sarah Jenkins — 6-month program',
-    time: '3 days ago',
-    type: 'pairing' as const,
-  },
-];
+import { useAnalytics } from '../hooks/useAnalytics';
+import { useActivity } from '../hooks/useActivity';
+import { formatDistanceToNow } from '../utils/dateUtils'; // We'll create this or use raw dates
 
 const activityTypeColors: Record<string, string> = {
   pairing: 'bg-primary/10 text-primary',
@@ -94,6 +23,56 @@ const activityTypeIcons: Record<string, typeof Handshake> = {
 };
 
 export default function Dashboard() {
+  const { stats, loading: statsLoading } = useAnalytics();
+  const { activities, loading: activityLoading } = useActivity();
+
+  const loading = statsLoading || activityLoading;
+
+  const statCardsData = [
+    {
+      label: 'Total Mentors',
+      value: stats.totalMentors,
+      icon: Users,
+      gradient: 'from-[#002045] to-[#1a365d]',
+      iconBg: 'bg-[#d6e3ff]',
+      iconColor: 'text-[#001b3c]',
+    },
+    {
+      label: 'Total Mentees',
+      value: stats.totalMentees,
+      icon: UserPlus,
+      gradient: 'from-[#1a365d] to-[#2a4a7f]',
+      iconBg: 'bg-[#d6e3ff]',
+      iconColor: 'text-[#001b3c]',
+    },
+    {
+      label: 'Active Pairings',
+      value: stats.activePairings,
+      icon: Handshake,
+      gradient: 'from-[#0d3b2e] to-[#14532d]',
+      iconBg: 'bg-[#d1fae5]',
+      iconColor: 'text-[#064e3b]',
+    },
+    {
+      label: 'Pending Matches',
+      value: stats.totalPairings - stats.activePairings,
+      icon: Clock,
+      gradient: 'from-[#78350f] to-[#92400e]',
+      iconBg: 'bg-[#fef3c7]',
+      iconColor: 'text-[#78350f]',
+    },
+  ];
+
+  if (loading) {
+    return (
+      <PageTransition>
+        <div className="flex bg-surface min-h-[50vh] items-center justify-center">
+          <Loader2 className="animate-spin text-primary" size={32} />
+        </div>
+      </PageTransition>
+    );
+  }
+
   return (
     <PageTransition>
       <PageHeader
@@ -103,7 +82,7 @@ export default function Dashboard() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
-        {stats.map((stat, i) => (
+        {statCardsData.map((stat, i) => (
           <StatCard
             key={stat.label}
             label={stat.label}
@@ -135,29 +114,37 @@ export default function Dashboard() {
               View all <ArrowRight size={12} />
             </button>
           </div>
-          <div className="space-y-2">
-            {recentActivity.map((item, i) => {
-              const TypeIcon = activityTypeIcons[item.type] || Handshake;
-              return (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4 + i * 0.06, duration: 0.3 }}
-                  whileHover={{ x: 4 }}
-                  className="flex items-start gap-4 p-4 rounded-2xl hover:bg-surface-container-low transition-all cursor-default"
-                >
-                  <div className={`w-9 h-9 rounded-xl ${activityTypeColors[item.type]} flex items-center justify-center shrink-0`}>
-                    <TypeIcon size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-primary">{item.action}</p>
-                    <p className="text-xs text-on-surface-variant mt-0.5 truncate">{item.detail}</p>
-                  </div>
-                  <span className="text-[10px] text-on-surface-variant whitespace-nowrap font-medium">{item.time}</span>
-                </motion.div>
-              );
-            })}
+          <div className="space-y-4">
+            {activities.length === 0 ? (
+              <p className="text-sm text-on-surface-variant italic">No recent activity.</p>
+            ) : (
+              activities.map((item, i) => {
+                const TypeIcon = activityTypeIcons[item.type] || Handshake;
+                // Simple date formatting for now
+                const dateObj = new Date(item.created_at);
+                const timeStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 + i * 0.06, duration: 0.3 }}
+                    whileHover={{ x: 4 }}
+                    className="flex items-start gap-4 p-4 rounded-2xl hover:bg-surface-container-low transition-all cursor-default group"
+                  >
+                    <div className={`w-9 h-9 rounded-xl ${activityTypeColors[item.type]} flex items-center justify-center shrink-0`}>
+                      <TypeIcon size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-primary">{item.action}</p>
+                      <p className="text-xs text-on-surface-variant mt-0.5 truncate group-hover:text-clip group-hover:whitespace-normal transition-all">{item.detail}</p>
+                    </div>
+                    <span className="text-[10px] text-on-surface-variant whitespace-nowrap font-medium">{timeStr}</span>
+                  </motion.div>
+                );
+              })
+            )}
           </div>
         </motion.section>
 

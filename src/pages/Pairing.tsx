@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Sparkles, History, X, CheckCircle, Zap } from 'lucide-react';
+import { Plus, Users, History, X, CheckCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MentorCard from '../components/MentorCard';
 import MenteeCard from '../components/MenteeCard';
@@ -7,48 +7,77 @@ import PairingPanel from '../components/PairingPanel';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import Modal from '../components/Modal';
-import { MENTORS, MENTEES, Mentor, Mentee } from '../types';
+import type { Mentor, Mentee } from '../types';
+import { useMembers } from '../hooks/useMembers';
+import { usePairings } from '../hooks/usePairings';
 
-interface Pairing {
-  id: string;
-  mentor: Mentor;
-  mentee: Mentee;
-  score: number;
-  date: string;
-}
+// Dept-keyword-to-major mapping for field relevance scoring
+const DEPT_MAJOR_MAP: Record<string, string[]> = {
+  physics: ['Physics'],
+  biology: ['Biology'],
+  history: ['History'],
+};
 
 function getCompatibilityScore(mentor: Mentor, mentee: Mentee): number {
-  const tagMap: Record<string, string[]> = {
-    Physics: ['Quantum Mechanics', 'Ethics'],
-    Biology: ['Genomics', 'Lab Mgmt'],
-    History: ['Latin', 'Archiving'],
-  };
-  const relevantTags = tagMap[mentee.major] || [];
-  const overlap = mentor.tags.filter((t) => relevantTags.includes(t)).length;
-  const base = overlap > 0 ? 70 + overlap * 12 : 40 + Math.random() * 20;
-  return Math.min(Math.round(base + Math.random() * 8), 99);
+  // 1. Tag / Interest overlap (0-50 points)
+  const menteeInterests = mentee.interests.map((i) => i.toLowerCase());
+  const tagOverlap = mentor.tags.filter((t) =>
+    menteeInterests.includes(t.toLowerCase())
+  ).length;
+  const maxPossibleOverlap = Math.max(mentor.tags.length, mentee.interests.length, 1);
+  const tagScore = Math.round((tagOverlap / maxPossibleOverlap) * 50);
+
+  // 2. Department / Major relevance (0-35 points)
+  const deptLower = mentor.dept.toLowerCase();
+  const relatedMajors = Object.entries(DEPT_MAJOR_MAP)
+    .filter(([keyword]) => deptLower.includes(keyword))
+    .flatMap(([, majors]) => majors);
+  const fieldScore = relatedMajors.includes(mentee.major) ? 35 : 5;
+
+  // 3. Program level bonus (0-15 points)
+  const programBonus = mentee.program === 'PhD Candidate'
+    ? 15
+    : mentee.program === 'Postdoctoral'
+      ? 12
+      : mentee.program === 'Masters'
+        ? 8
+        : 4;
+
+  return Math.min(tagScore + fieldScore + programBonus, 100);
 }
 
 export default function Pairing() {
+  const { mentors, mentees, loading: membersLoading } = useMembers();
+  const { pairings, loading: pairingsLoading, createPairing } = usePairings();
+
   const [selectedMentor, setSelectedMentor] = useState<Mentor | null>(null);
   const [selectedMentee, setSelectedMentee] = useState<Mentee | null>(null);
-  const [pairings, setPairings] = useState<Pairing[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showAutoMatch, setShowAutoMatch] = useState(false);
   const [addType, setAddType] = useState<'mentor' | 'mentee'>('mentor');
+  const [creating, setCreating] = useState(false);
 
-  // Form state for add modal
+  // Form state for add modal (Not hooked to Supabase yet in this phase)
   const [formName, setFormName] = useState('');
   const [formDept, setFormDept] = useState('');
   const [formProgram, setFormProgram] = useState('');
   const [formMajor, setFormMajor] = useState('');
   const [formTags, setFormTags] = useState('');
 
-  const pairedMentorIds = new Set(pairings.map((p) => p.mentor.id));
-  const pairedMenteeIds = new Set(pairings.map((p) => p.mentee.id));
+  const loading = membersLoading || pairingsLoading;
 
-  const availableMentors = MENTORS.filter((m) => !pairedMentorIds.has(m.id));
-  const availableMentees = MENTEES.filter((m) => !pairedMenteeIds.has(m.id));
+  const pairedMentorIds = new Set(pairings.map((p) => p.mentor_id));
+  const pairedMenteeIds = new Set(pairings.map((p) => p.mentee_id));
+
+  const availableMentors = mentors.filter((m) => !pairedMentorIds.has(m.id));
+  const availableMentees = mentees.filter((m) => !pairedMenteeIds.has(m.id));
+
+  // Map pairings to include actual mentor/mentee objects for rendering
+  const completePairings = pairings.map(p => {
+    const mentor = mentors.find(m => m.id === p.mentor_id);
+    const mentee = mentees.find(m => m.id === p.mentee_id);
+    return { ...p, mentor, mentee };
+  }).filter(p => p.mentor && p.mentee) as (typeof pairings[0] & { mentor: Mentor; mentee: Mentee })[];
 
   const autoMatchResults = useMemo(() => {
     if (!showAutoMatch) return [];
@@ -61,20 +90,18 @@ export default function Pairing() {
     ).sort((a, b) => b.score - a.score).slice(0, 3);
   }, [showAutoMatch, availableMentors, availableMentees]);
 
-  const handleConfirmPairing = (mentor: Mentor, mentee: Mentee, score: number) => {
-    setPairings((prev) => [
-      ...prev,
-      {
-        id: `p-${Date.now()}`,
-        mentor,
-        mentee,
-        score,
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      },
-    ]);
-    setShowAutoMatch(false);
-    setSelectedMentor(null);
-    setSelectedMentee(null);
+  const handleConfirmPairing = async (mentor: Mentor, mentee: Mentee, score: number) => {
+    setCreating(true);
+    try {
+      await createPairing(mentor.id, mentee.id, score);
+      setShowAutoMatch(false);
+      setSelectedMentor(null);
+      setSelectedMentee(null);
+    } catch (err) {
+      console.error('Failed to create pairing:', err);
+    } finally {
+      setCreating(false);
+    }
   };
 
   const resetAddForm = () => {
@@ -84,6 +111,16 @@ export default function Pairing() {
     setFormMajor('');
     setFormTags('');
   };
+
+  if (loading) {
+    return (
+      <PageTransition>
+        <div className="flex bg-surface min-h-[50vh] items-center justify-center">
+          <Loader2 className="animate-spin text-primary" size={32} />
+        </div>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>
@@ -97,7 +134,7 @@ export default function Pairing() {
             }}
             className="px-5 py-2.5 bg-gradient-to-r from-primary to-primary-container text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 flex items-center gap-2 active:scale-95 transition-transform hover:shadow-xl"
           >
-            <Sparkles size={16} />
+            <Users size={16} />
             Auto-Match
           </button>
         }
@@ -115,8 +152,8 @@ export default function Pairing() {
             <div className="bg-gradient-to-r from-primary/5 to-primary-container/10 rounded-3xl p-6 border border-primary/10">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Zap size={18} className="text-primary" />
-                  <h3 className="font-headline font-bold text-primary">AI-Suggested Matches</h3>
+                  <Users size={18} className="text-primary" />
+                  <h3 className="font-headline font-bold text-primary">Profile-Based Matches</h3>
                 </div>
                 <button onClick={() => setShowAutoMatch(false)} className="p-1.5 rounded-lg hover:bg-white/60 transition-colors">
                   <X size={16} className="text-on-surface-variant" />
@@ -142,10 +179,11 @@ export default function Pairing() {
                     <p className="text-xs font-bold text-primary">{result.mentor.name}</p>
                     <p className="text-[10px] text-on-surface-variant mb-1">with {result.mentee.name}</p>
                     <button
+                      disabled={creating}
                       onClick={() => handleConfirmPairing(result.mentor, result.mentee, result.score)}
-                      className="w-full mt-2 py-2 text-xs font-bold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors flex items-center justify-center gap-1"
+                      className="w-full mt-2 py-2 text-xs font-bold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors flex items-center justify-center gap-1 disabled:opacity-50"
                     >
-                      <CheckCircle size={12} /> Confirm
+                      {creating ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />} Confirm
                     </button>
                   </motion.div>
                 ))}
@@ -225,12 +263,22 @@ export default function Pairing() {
           <PairingPanel
             selectedMentor={selectedMentor}
             selectedMentee={selectedMentee}
+            onPair={async () => {
+              if (selectedMentor && selectedMentee) {
+                await handleConfirmPairing(selectedMentor, selectedMentee, getCompatibilityScore(selectedMentor, selectedMentee));
+              }
+            }}
+            compatibilityScore={
+              selectedMentor && selectedMentee
+                ? getCompatibilityScore(selectedMentor, selectedMentee)
+                : null
+            }
           />
         </div>
       </div>
 
       {/* Pairing History */}
-      {pairings.length > 0 && (
+      {completePairings.length > 0 && (
         <motion.section
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -240,11 +288,11 @@ export default function Pairing() {
             <History size={18} className="text-primary" />
             <h2 className="font-headline font-bold text-lg text-primary">Pairing History</h2>
             <span className="px-2 py-0.5 bg-surface-container-high rounded-full text-xs font-bold text-on-surface-variant">
-              {pairings.length}
+              {completePairings.length}
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {pairings.map((pairing, i) => (
+            {completePairings.map((pairing, i) => (
               <motion.div
                 key={pairing.id}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -267,7 +315,7 @@ export default function Pairing() {
                   paired with <span className="font-semibold">{pairing.mentee.name}</span>
                 </p>
                 <p className="text-[10px] text-on-surface-variant mt-2 flex items-center gap-1">
-                  <CheckCircle size={10} className="text-green-600" /> Confirmed — {pairing.date}
+                  <CheckCircle size={10} className="text-green-600" /> Confirmed — {new Date(pairing.created_at).toLocaleDateString()}
                 </p>
               </motion.div>
             ))}

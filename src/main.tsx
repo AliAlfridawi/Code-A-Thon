@@ -1,26 +1,53 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
 import App from './App';
 import Dashboard from './pages/Dashboard';
 import Pairing from './pages/Pairing';
 import Messages from './pages/Messages';
 import Members from './pages/Members';
 import Settings from './pages/Settings';
+import SignInPage from './pages/SignIn';
+import SignUpPage from './pages/SignUp';
 import './index.css';
+
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+if (!clerkPubKey) {
+  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY. Check your .env file.');
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route element={<App />}>
-          <Route index element={<Dashboard />} />
-          <Route path="pairing" element={<Pairing />} />
-          <Route path="messages" element={<Messages />} />
-          <Route path="members" element={<Members />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <ClerkProvider publishableKey={clerkPubKey}>
+      <BrowserRouter>
+        <Routes>
+          {/* Public auth routes */}
+          <Route path="/sign-in/*" element={<SignInPage />} />
+          <Route path="/sign-up/*" element={<SignUpPage />} />
+
+          {/* Protected app routes */}
+          <Route
+            element={
+              <>
+                <SignedIn>
+                  <App />
+                </SignedIn>
+                <SignedOut>
+                  <RedirectToSignIn />
+                </SignedOut>
+              </>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="pairing" element={<Pairing />} />
+            <Route path="messages" element={<Messages />} />
+            <Route path="members" element={<Members />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ClerkProvider>
   </StrictMode>
 );

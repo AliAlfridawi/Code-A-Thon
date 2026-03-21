@@ -36,6 +36,18 @@ export default function MenteeCard({ mentee, isSelected, onClick }: MenteeCardPr
           <MoreVertical size={18} />
         </button>
       </div>
+      {mentee.interests && mentee.interests.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-3">
+          {mentee.interests.map((interest) => (
+            <span
+              key={interest}
+              className="px-2 py-0.5 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded uppercase tracking-wider"
+            >
+              {interest}
+            </span>
+          ))}
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -1,15 +1,5 @@
 /**
- * Placeholder for Clerk authentication.
- * Replace with @clerk/clerk-react or similar.
+ * Auth hooks — powered by Clerk.
+ * Re-exports Clerk hooks for consistent imports across the app.
  */
-export const useAuth = () => {
-  // Mock auth state
-  return {
-    isSignedIn: true,
-    user: {
-      id: 'user_123',
-      fullName: 'Alfrid Awiali',
-      primaryEmailAddress: 'alfridawiali@gmail.com',
-    },
-  };
-};
+export { useUser, useAuth, useClerk } from '@clerk/clerk-react';

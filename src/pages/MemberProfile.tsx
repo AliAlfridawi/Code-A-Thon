@@ -1,18 +1,22 @@
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Mail, MapPin, Calendar, Clock, BookOpen, Beaker, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Mail, MapPin, Calendar, Clock, BookOpen, Beaker, GraduationCap, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import PageTransition from '../components/PageTransition';
-import { MENTORS, MENTEES } from '../types';
-import { MENTOR_PROFILES, MENTEE_PROFILES } from '../data/profiles';
+import { useMemberProfile } from '../hooks/useMembers';
 
 export default function MemberProfile() {
   const { id } = useParams<{ id: string }>();
+  const { profile, person, loading } = useMemberProfile(id);
 
-  const mentor = MENTORS.find((m) => m.id === id);
-  const mentee = MENTEES.find((m) => m.id === id);
-  const person = mentor || mentee;
-  const profile = id ? (MENTOR_PROFILES[id] || MENTEE_PROFILES[id]) : null;
-  const isMentor = !!mentor;
+  if (loading) {
+    return (
+      <PageTransition>
+        <div className="flex bg-surface min-h-[50vh] items-center justify-center">
+          <Loader2 className="animate-spin text-primary" size={32} />
+        </div>
+      </PageTransition>
+    );
+  }
 
   if (!person || !profile) {
     return (
@@ -30,6 +34,8 @@ export default function MemberProfile() {
       </PageTransition>
     );
   }
+
+  const isMentor = person.type === 'mentor';
 
   return (
     <PageTransition>
@@ -60,7 +66,7 @@ export default function MemberProfile() {
                 <div>
                   <h1 className="text-2xl font-headline font-extrabold text-primary">{person.name}</h1>
                   <p className="text-sm text-on-surface-variant mt-0.5">
-                    {isMentor ? (mentor!.dept) : (`${mentee!.program} • ${mentee!.major}`)}
+                    {isMentor ? person.dept : `${person.program} • ${person.major}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -92,49 +98,53 @@ export default function MemberProfile() {
           </motion.section>
 
           {/* Research Interests */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10"
-          >
-            <h2 className="font-headline font-bold text-lg text-primary mb-4 flex items-center gap-2">
-              <Beaker size={18} /> Research Interests
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              {profile.researchInterests.map((interest) => (
-                <span key={interest} className="px-3 py-1.5 bg-primary-fixed text-on-primary-fixed text-xs font-bold rounded-xl">
-                  {interest}
-                </span>
-              ))}
-            </div>
-          </motion.section>
-
-          {/* Publications */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10"
-          >
-            <h2 className="font-headline font-bold text-lg text-primary mb-4 flex items-center gap-2">
-              <BookOpen size={18} /> Publications
-            </h2>
-            {profile.publications.length > 0 ? (
-              <div className="space-y-4">
-                {profile.publications.map((pub, i) => (
-                  <div key={i} className="p-4 rounded-2xl bg-surface-container-low hover:bg-surface-container-high transition-colors">
-                    <p className="text-sm font-bold text-primary">{pub.title}</p>
-                    <p className="text-xs text-on-surface-variant mt-1">
-                      {pub.journal} • {pub.year}
-                    </p>
-                  </div>
+          {profile.researchInterests && profile.researchInterests.length > 0 && (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10"
+            >
+              <h2 className="font-headline font-bold text-lg text-primary mb-4 flex items-center gap-2">
+                <Beaker size={18} /> Research Interests
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {profile.researchInterests.map((interest) => (
+                  <span key={interest} className="px-3 py-1.5 bg-primary-fixed text-on-primary-fixed text-xs font-bold rounded-xl">
+                    {interest}
+                  </span>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-on-surface-variant italic">No publications yet.</p>
-            )}
-          </motion.section>
+            </motion.section>
+          )}
+
+          {/* Publications */}
+          {profile.publications && (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10"
+            >
+              <h2 className="font-headline font-bold text-lg text-primary mb-4 flex items-center gap-2">
+                <BookOpen size={18} /> Publications
+              </h2>
+              {profile.publications.length > 0 ? (
+                <div className="space-y-4">
+                  {profile.publications.map((pub: any, i: number) => (
+                    <div key={i} className="p-4 rounded-2xl bg-surface-container-low hover:bg-surface-container-high transition-colors">
+                      <p className="text-sm font-bold text-primary">{pub.title}</p>
+                      <p className="text-xs text-on-surface-variant mt-1">
+                        {pub.journal} • {pub.year}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-on-surface-variant italic">No publications yet.</p>
+              )}
+            </motion.section>
+          )}
         </div>
 
         {/* Right Column — Contact & Availability */}
@@ -173,27 +183,29 @@ export default function MemberProfile() {
           </motion.section>
 
           {/* Availability */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10"
-          >
-            <h2 className="font-headline font-bold text-lg text-primary mb-4 flex items-center gap-2">
-              <Clock size={18} /> Availability
-            </h2>
-            <div className="space-y-3">
-              {profile.availability.map((slot) => (
-                <div key={slot.day} className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low">
-                  <span className="text-sm font-bold text-primary">{slot.day}</span>
-                  <span className="text-xs text-on-surface-variant">{slot.hours}</span>
-                </div>
-              ))}
-            </div>
-          </motion.section>
+          {profile.availability && profile.availability.length > 0 && (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10"
+            >
+              <h2 className="font-headline font-bold text-lg text-primary mb-4 flex items-center gap-2">
+                <Clock size={18} /> Availability
+              </h2>
+              <div className="space-y-3">
+                {profile.availability.map((slot: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-surface-container-low">
+                    <span className="text-sm font-bold text-primary">{slot.day}</span>
+                    <span className="text-xs text-on-surface-variant">{slot.hours}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.section>
+          )}
 
           {/* Expertise Tags (mentors only) */}
-          {isMentor && mentor!.tags.length > 0 && (
+          {isMentor && person.tags && person.tags.length > 0 && (
             <motion.section
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -202,7 +214,7 @@ export default function MemberProfile() {
             >
               <h2 className="font-headline font-bold text-lg text-primary mb-4">Expertise</h2>
               <div className="flex flex-wrap gap-2">
-                {mentor!.tags.map((tag) => (
+                {person.tags.map((tag) => (
                   <span key={tag} className="px-2.5 py-1 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded uppercase tracking-wider">
                     {tag}
                   </span>

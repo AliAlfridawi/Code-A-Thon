@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { User, Bell, Palette, Shield, Save, Camera } from 'lucide-react';
+import { User, Bell, Palette, Shield, Save, Camera, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
+import { useSettings } from '../hooks/useSettings';
+import { useUser } from '@clerk/clerk-react';
 
 interface ToggleProps {
   enabled: boolean;
@@ -27,12 +28,8 @@ function Toggle({ enabled, onToggle }: ToggleProps) {
 }
 
 export default function Settings() {
-  const [emailNotifs, setEmailNotifs] = useState(true);
-  const [pushNotifs, setPushNotifs] = useState(false);
-  const [weeklyDigest, setWeeklyDigest] = useState(true);
-  const [matchAlerts, setMatchAlerts] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
-  const [compactView, setCompactView] = useState(false);
+  const { settings, loading, updateSetting } = useSettings();
+  const { user } = useUser(); // From Clerk
 
   const sections = [
     {
@@ -60,6 +57,16 @@ export default function Settings() {
       description: 'Manage your account security',
     },
   ];
+
+  if (loading) {
+    return (
+      <PageTransition>
+        <div className="flex bg-surface min-h-[50vh] items-center justify-center">
+          <Loader2 className="animate-spin text-primary" size={32} />
+        </div>
+      </PageTransition>
+    );
+  }
 
   return (
     <PageTransition>
@@ -98,10 +105,10 @@ export default function Settings() {
             <h2 className="font-headline font-bold text-lg text-primary mb-6 flex items-center gap-2">
               <User size={20} /> Profile
             </h2>
-            <div className="flex items-start gap-6 mb-6">
-              <div className="relative group">
+            <div className="flex flex-col sm:flex-row items-start gap-6 mb-6">
+              <div className="relative group shrink-0">
                 <img
-                  src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150&h=150"
+                  src={user?.imageUrl || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150&h=150"}
                   alt="Profile"
                   className="w-20 h-20 rounded-2xl object-cover"
                 />
@@ -109,32 +116,31 @@ export default function Settings() {
                   <Camera size={20} className="text-white" />
                 </button>
               </div>
-              <div className="flex-1 space-y-4">
+              <div className="flex-1 space-y-4 w-full">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Full Name</label>
                     <input
                       type="text"
-                      defaultValue="Alfrid Awiali"
-                      className="w-full px-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20 border border-outline-variant/10 transition-all"
+                      defaultValue={user?.fullName || ''}
+                      readOnly
+                      className="w-full px-4 py-2.5 bg-surface-container-low opacity-70 cursor-not-allowed rounded-xl text-sm text-on-surface outline-none border border-outline-variant/10 transition-all"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Email</label>
                     <input
                       type="email"
-                      defaultValue="alfridawiali@gmail.com"
-                      className="w-full px-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20 border border-outline-variant/10 transition-all"
+                      defaultValue={user?.primaryEmailAddress?.emailAddress || ''}
+                      readOnly
+                      className="w-full px-4 py-2.5 bg-surface-container-low opacity-70 cursor-not-allowed rounded-xl text-sm text-on-surface outline-none border border-outline-variant/10 transition-all"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Role</label>
-                  <input
-                    type="text"
-                    defaultValue="Program Administrator"
-                    className="w-full px-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20 border border-outline-variant/10 transition-all"
-                  />
+                  <p className="text-xs text-on-surface-variant italic">
+                    Note: Profile and security settings are managed via your Clerk account portal.
+                  </p>
                 </div>
               </div>
             </div>
@@ -153,17 +159,20 @@ export default function Settings() {
             </h2>
             <div className="space-y-5">
               {[
-                { label: 'Email notifications', desc: 'Receive pairing updates via email', enabled: emailNotifs, toggle: () => setEmailNotifs(!emailNotifs) },
-                { label: 'Push notifications', desc: 'Get real-time browser notifications', enabled: pushNotifs, toggle: () => setPushNotifs(!pushNotifs) },
-                { label: 'Weekly digest', desc: 'Summary of activity sent every Monday', enabled: weeklyDigest, toggle: () => setWeeklyDigest(!weeklyDigest) },
-                { label: 'Match alerts', desc: 'Notify when a new match is suggested', enabled: matchAlerts, toggle: () => setMatchAlerts(!matchAlerts) },
+                { label: 'Email notifications', desc: 'Receive pairing updates via email', key: 'email_notifs' },
+                { label: 'Push notifications', desc: 'Get real-time browser notifications', key: 'push_notifs' },
+                { label: 'Weekly digest', desc: 'Summary of activity sent every Monday', key: 'weekly_digest' },
+                { label: 'Match alerts', desc: 'Notify when a new match is suggested', key: 'match_alerts' },
               ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between p-4 rounded-2xl hover:bg-surface-container-low transition-colors">
+                <div key={item.key} className="flex items-center justify-between p-4 rounded-2xl hover:bg-surface-container-low transition-colors">
                   <div>
                     <p className="text-sm font-bold text-primary">{item.label}</p>
                     <p className="text-xs text-on-surface-variant mt-0.5">{item.desc}</p>
                   </div>
-                  <Toggle enabled={item.enabled} onToggle={item.toggle} />
+                  <Toggle 
+                    enabled={!!settings[item.key as keyof typeof settings]} 
+                    onToggle={() => updateSetting(item.key as keyof typeof settings, !settings[item.key as keyof typeof settings])} 
+                  />
                 </div>
               ))}
             </div>
@@ -186,14 +195,20 @@ export default function Settings() {
                   <p className="text-sm font-bold text-primary">Dark mode</p>
                   <p className="text-xs text-on-surface-variant mt-0.5">Switch to a darker color scheme</p>
                 </div>
-                <Toggle enabled={darkMode} onToggle={() => setDarkMode(!darkMode)} />
+                <Toggle 
+                  enabled={!!settings.dark_mode} 
+                  onToggle={() => updateSetting('dark_mode', !settings.dark_mode)} 
+                />
               </div>
               <div className="flex items-center justify-between p-4 rounded-2xl hover:bg-surface-container-low transition-colors">
                 <div>
                   <p className="text-sm font-bold text-primary">Compact view</p>
                   <p className="text-xs text-on-surface-variant mt-0.5">Reduce spacing and card sizes</p>
                 </div>
-                <Toggle enabled={compactView} onToggle={() => setCompactView(!compactView)} />
+                <Toggle 
+                  enabled={!!settings.compact_view} 
+                  onToggle={() => updateSetting('compact_view', !settings.compact_view)} 
+                />
               </div>
             </div>
           </motion.section>
@@ -210,28 +225,16 @@ export default function Settings() {
               <Shield size={20} /> Security
             </h2>
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Current Password</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full px-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20 border border-outline-variant/10 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">New Password</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full px-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/20 border border-outline-variant/10 transition-all"
-                  />
-                </div>
-              </div>
+               <p className="text-sm text-on-surface-variant mb-4">
+                  For enhanced security, password resets and two-factor authentication must be managed directly through your provider.
+               </p>
+               <button className="px-5 py-2.5 bg-surface-container-low text-primary font-bold rounded-xl border border-outline-variant/10 hover:border-primary/30 transition-all">
+                 Manage Account Security
+               </button>
             </div>
           </motion.section>
 
-          {/* Save Button */}
+          {/* Save Button (Optional since toggles auto-save) */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -240,7 +243,7 @@ export default function Settings() {
           >
             <button className="px-8 py-3.5 bg-gradient-to-r from-primary to-primary-container text-white font-bold rounded-2xl shadow-lg shadow-primary/20 flex items-center gap-2 active:scale-95 transition-transform hover:shadow-xl">
               <Save size={18} />
-              Save Changes
+              Save Preferences
             </button>
           </motion.div>
         </div>

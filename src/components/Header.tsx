@@ -1,5 +1,6 @@
-import { Bell, UserCircle } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { UserButton } from '@clerk/clerk-react';
 
 export default function Header() {
   const linkClass = (isActive: boolean) =>
@@ -26,9 +27,13 @@ export default function Header() {
           <button className="p-2 rounded-full hover:bg-surface-container-low transition-colors duration-200 active:scale-95">
             <Bell size={20} className="text-on-surface-variant" />
           </button>
-          <button className="p-2 rounded-full hover:bg-surface-container-low transition-colors duration-200 active:scale-95">
-            <UserCircle size={24} className="text-on-surface-variant" />
-          </button>
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: 'w-9 h-9 rounded-full',
+              },
+            }}
+          />
         </div>
       </div>
     </header>

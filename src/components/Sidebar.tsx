@@ -1,6 +1,7 @@
 import { LayoutDashboard, MessageSquare, UserPlus, Users, Settings, HelpCircle, LogOut } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { useClerk } from '@clerk/clerk-react';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', to: '/' },
@@ -11,6 +12,8 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { signOut } = useClerk();
+
   return (
     <aside className="h-screen w-64 sticky top-0 bg-surface-container-low flex flex-col py-6 font-headline text-sm font-medium">
       <div className="px-6 mb-8">
@@ -47,11 +50,15 @@ export default function Sidebar() {
           <HelpCircle size={20} />
           <span>Help</span>
         </a>
-        <a className="flex items-center gap-3 px-4 py-2 text-error hover:bg-error-container/20 rounded-xl transition-all duration-300" href="#">
+        <button
+          onClick={() => signOut()}
+          className="w-full flex items-center gap-3 px-4 py-2 text-error hover:bg-error-container/20 rounded-xl transition-all duration-300"
+        >
           <LogOut size={20} />
           <span>Logout</span>
-        </a>
+        </button>
       </div>
     </aside>
   );
 }
+
