@@ -263,16 +263,7 @@ export default function Pairing() {
           <PairingPanel
             selectedMentor={selectedMentor}
             selectedMentee={selectedMentee}
-            onPair={async () => {
-              if (selectedMentor && selectedMentee) {
-                await handleConfirmPairing(selectedMentor, selectedMentee, getCompatibilityScore(selectedMentor, selectedMentee));
-              }
-            }}
-            compatibilityScore={
-              selectedMentor && selectedMentee
-                ? getCompatibilityScore(selectedMentor, selectedMentee)
-                : null
-            }
+            compatibilityScore={getCompatibilityScore(selectedMentor, selectedMentee)}
           />
         </div>
       </div>

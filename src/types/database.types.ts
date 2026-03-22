@@ -125,6 +125,18 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['user_settings']['Row'], 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }
         Update: Partial<Database['public']['Tables']['user_settings']['Insert']>
       }
+      user_profiles: {
+        Row: {
+          id: string
+          clerk_user_id: string
+          role: 'mentor' | 'mentee'
+          onboarding_complete: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database['public']['Tables']['user_profiles']['Row'], 'id' | 'created_at' | 'updated_at'> & { id?: string; created_at?: string; updated_at?: string }
+        Update: Partial<Database['public']['Tables']['user_profiles']['Insert']>
+      }
     }
   }
 }

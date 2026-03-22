@@ -9,6 +9,7 @@ export type ConversationMemberRow = Database['public']['Tables']['conversation_m
 export type MessageRow = Database['public']['Tables']['messages']['Row'];
 export type ActivityLogRow = Database['public']['Tables']['activity_log']['Row'];
 export type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
+export type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];
 
 /**
  * Standard Mentor interface adapted from DB row
@@ -32,6 +33,9 @@ export interface Mentee {
   avatar: string; // mapped from avatar_url
   interests: string[];
 }
+
+export const MENTORS: Mentor[] = [];
+export const MENTEES: Mentee[] = [];
 
 export interface ExtendedProfile {
   bio: string;

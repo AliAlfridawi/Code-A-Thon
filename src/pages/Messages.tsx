@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Search, Send, Paperclip, MoreVertical, Phone, Video, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import PageTransition from '../components/PageTransition';

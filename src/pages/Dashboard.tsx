@@ -6,7 +6,9 @@ import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useActivity } from '../hooks/useActivity';
-import { formatDistanceToNow } from '../utils/dateUtils'; // We'll create this or use raw dates
+import { formatDistanceToNow } from '../utils/dateUtils';
+
+// ... (rest of imports)
 
 const activityTypeColors: Record<string, string> = {
   pairing: 'bg-primary/10 text-primary',
@@ -84,7 +86,6 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
         {statCardsData.map((stat, i) => (
           <StatCard
-            key={stat.label}
             label={stat.label}
             value={stat.value}
             icon={stat.icon}
