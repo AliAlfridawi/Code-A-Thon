@@ -352,9 +352,14 @@ export default function Matching() {
                             </div>
                           </div>
                         ) : (
-                          <div className="flex-1 py-2.5 bg-amber-50 text-amber-700 font-bold text-xs rounded-xl flex items-center justify-center">
-                            Approval Pending
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openChat(match)}
+                            className="flex-1 py-2.5 bg-amber-50 text-amber-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 hover:bg-amber-100 transition-colors"
+                          >
+                            <MessageSquare size={14} />
+                            Send Intro Message
+                          </button>
                         )
                       ) : (
                         <button
