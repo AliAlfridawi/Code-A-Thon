@@ -2,6 +2,7 @@ import { LayoutDashboard, MessageSquare, UserPlus, Users, Settings, HelpCircle, 
 import { NavLink } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useClerk, useUser } from '@clerk/clerk-react';
+import { HELP_ROUTE } from '../constants/routes';
 
 const ADMIN_EMAIL = 'alfridawiali@gmail.com';
 
@@ -63,10 +64,20 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-4 py-4 mt-auto border-t border-outline-variant/20 space-y-1">
-        <a className="flex items-center gap-3 px-4 py-2 text-primary/70 hover:bg-white/50 rounded-xl transition-all duration-300" href="#">
-          <HelpCircle size={20} />
-          <span>Help</span>
-        </a>
+        <NavLink to={HELP_ROUTE}>
+          {({ isActive }) => (
+            <div
+              className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300 ${
+                isActive
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-primary/70 hover:bg-white/50'
+              }`}
+            >
+              <HelpCircle size={20} />
+              <span>Help</span>
+            </div>
+          )}
+        </NavLink>
         <button
           onClick={() => signOut()}
           className="w-full flex items-center gap-3 px-4 py-2 text-error hover:bg-error-container/20 rounded-xl transition-all duration-300"

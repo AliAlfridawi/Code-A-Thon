@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
+import { buildMemberProfileRoute } from '../constants/routes';
 import { useMembers } from '../hooks/useMembers';
 
 type Tab = 'mentors' | 'mentees';
@@ -138,7 +139,7 @@ export default function Members() {
                       ))}
                     </div>
                     <div className="flex items-center gap-2 mt-auto pt-4 border-t border-outline-variant/10">
-                      <Link to={`/members/${mentor.id}`} className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors text-center">
+                      <Link to={buildMemberProfileRoute(mentor.id)} className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors text-center">
                         View Profile
                       </Link>
                       <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
@@ -165,7 +166,7 @@ export default function Members() {
                       </span>
                     ))}
                   </div>
-                  <Link to={`/members/${mentor.id}`} className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
+                  <Link to={buildMemberProfileRoute(mentor.id)} className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
                     View
                   </Link>
                 </>
@@ -209,7 +210,7 @@ export default function Members() {
                       ))}
                     </div>
                     <div className="flex items-center gap-2 mt-auto pt-4 border-t border-outline-variant/10">
-                      <Link to={`/members/${mentee.id}`} className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors text-center">
+                      <Link to={buildMemberProfileRoute(mentee.id)} className="flex-1 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors text-center">
                         View Profile
                       </Link>
                       <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
@@ -235,7 +236,7 @@ export default function Members() {
                       </span>
                     ))}
                   </div>
-                  <Link to={`/members/${mentee.id}`} className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
+                  <Link to={buildMemberProfileRoute(mentee.id)} className="px-4 py-2 text-xs font-semibold text-primary bg-surface-container-low rounded-xl hover:bg-primary hover:text-white transition-colors shrink-0">
                     View
                   </Link>
                 </>

@@ -196,7 +196,9 @@ export interface Database {
         Args: {
           pairing_id: string
         }
-        Returns: Database['public']['Tables']['conversations']['Row'][]
+        Returns: {
+          conversation_id: string
+        }[]
       }
       get_my_conversations: {
         Args: Record<string, never>
@@ -205,7 +207,7 @@ export interface Database {
           pairing_id: string
           pairing_status: 'pending' | 'active' | 'completed'
           conversation_updated_at: string
-          counterpart_clerk_user_id: string
+          counterpart_clerk_user_id: string | null
           counterpart_profile_id: string
           counterpart_role: 'mentor' | 'mentee'
           counterpart_display_name: string

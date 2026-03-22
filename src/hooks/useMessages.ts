@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from './useSupabase';
@@ -6,6 +6,10 @@ import type { MessageRow } from '../types';
 import type { Database } from '../types/database.types';
 
 export type ConversationSummary = Database['public']['Functions']['get_my_conversations']['Returns'][number];
+export interface EnsureConversationResult {
+  conversationId: string | null;
+  error: string | null;
+}
 
 function upsertMessage(list: MessageRow[], message: MessageRow) {
   if (list.some((entry) => entry.id === message.id)) {
@@ -58,6 +62,7 @@ export function useMessages() {
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [activeChannel, setActiveChannel] = useState<RealtimeChannel | null>(null);
+  const refreshRequestIdRef = useRef(0);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.conversation_id === activeConversationId) ?? null,
@@ -65,16 +70,24 @@ export function useMessages() {
   );
 
   const refreshConversations = useCallback(async () => {
+    const requestId = ++refreshRequestIdRef.current;
+
     if (!user) {
-      setConversations([]);
-      setActiveConversationId(null);
-      setLoadingConversations(false);
+      if (requestId === refreshRequestIdRef.current) {
+        setConversations([]);
+        setActiveConversationId(null);
+        setLoadingConversations(false);
+      }
       return [];
     }
 
     setLoadingConversations(true);
 
     const { data, error } = await supabase.rpc('get_my_conversations');
+
+    if (requestId !== refreshRequestIdRef.current) {
+      return data ?? [];
+    }
 
     if (error) {
       console.error('Error loading conversations:', error);
@@ -202,9 +215,12 @@ export function useMessages() {
     return data;
   }, [activeConversationId, sendTypingIndicator, supabase, user]);
 
-  const ensureConversation = useCallback(async (pairingId: string) => {
+  const ensureConversation = useCallback(async (pairingId: string): Promise<EnsureConversationResult> => {
     if (!user) {
-      return null;
+      return {
+        conversationId: null,
+        error: 'You must be signed in to start a conversation.',
+      };
     }
 
     const { data, error } = await supabase
@@ -212,19 +228,28 @@ export function useMessages() {
       .single();
 
     if (error) {
-      console.error('Error ensuring pairing conversation:', error);
-      return null;
+      if (import.meta.env.DEV) {
+        console.error(`Error ensuring pairing conversation for pairing ${pairingId}:`, error);
+      }
+
+      return {
+        conversationId: null,
+        error: error.message || 'Could not start this conversation right now.',
+      };
     }
 
     const nextConversations = await refreshConversations();
-    const ensuredConversationId = data.id;
+    const ensuredConversationId = data.conversation_id;
 
     setActiveConversationId(
       nextConversations.find((conversation) => conversation.conversation_id === ensuredConversationId)?.conversation_id
         ?? ensuredConversationId
     );
 
-    return ensuredConversationId;
+    return {
+      conversationId: ensuredConversationId,
+      error: null,
+    };
   }, [refreshConversations, supabase, user]);
 
   useEffect(() => {

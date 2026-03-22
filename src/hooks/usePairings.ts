@@ -65,5 +65,20 @@ export function usePairings() {
     }
   }, [supabase]);
 
-  return { pairings, loading, createPairing, updatePairingStatus };
+  const deletePairing = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('pairings')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setPairings(prev => prev.filter((pairing) => pairing.id !== id));
+    } catch (err) {
+      console.error('Error deleting pairing:', err);
+      throw err;
+    }
+  }, [supabase]);
+
+  return { pairings, loading, createPairing, updatePairingStatus, deletePairing };
 }

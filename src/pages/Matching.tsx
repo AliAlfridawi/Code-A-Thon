@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, Star, Heart, MessageSquare, Loader2, Search,
-  GraduationCap, BookOpen, FlaskConical, UserCheck, X, Send, CalendarPlus
+  GraduationCap, BookOpen, FlaskConical, UserCheck, X, Send, CalendarPlus, Check
 } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
@@ -12,13 +13,15 @@ import { useUserProfile } from '../hooks/useUserProfile';
 import { usePairings } from '../hooks/usePairings';
 import { useMessages } from '../hooks/useMessages';
 import { useMeetings } from '../hooks/useMeetings';
+import { buildMessagesRoute } from '../constants/routes';
 import { calculateMatches, MatchCandidate } from '../services/matchingService';
 
 export default function Matching() {
   const { user } = useUser();
+  const navigate = useNavigate();
   const supabase = useSupabase();
   const { profile, role, loading: profileLoading } = useUserProfile();
-  const { pairings, loading: pairingsLoading, createPairing } = usePairings();
+  const { pairings, loading: pairingsLoading, createPairing, updatePairingStatus, deletePairing } = usePairings();
   const {
     conversations,
     activeConversation,
@@ -43,10 +46,12 @@ export default function Matching() {
   const [showSchedule, setShowSchedule] = useState(false);
   const [meetingForm, setMeetingForm] = useState({ title: '', date: '', time: '', link: '' });
   const [scheduling, setScheduling] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<'accept' | 'deny' | null>(null);
 
   useEffect(() => {
     async function fetchMatches() {
-      if (!profile || !role) {
+      if (!profile || !role || !user) {
         return;
       }
 
@@ -59,14 +64,15 @@ export default function Matching() {
         return;
       }
 
-      const results = calculateMatches(profile as any, data, role);
+      const eligibleCandidates = (data ?? []).filter((candidate) => candidate.clerk_user_id !== user.id);
+      const results = calculateMatches(profile as any, eligibleCandidates, role);
       setMatches(results);
       setFilteredMatches(results);
       setLoading(false);
     }
 
     void fetchMatches();
-  }, [profile, role, supabase]);
+  }, [profile, role, supabase, user]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -155,28 +161,45 @@ export default function Matching() {
     const matchId = match.id as string;
     const pairing = pairingsByMatchId.get(matchId);
 
-    if (!pairing) {
+    if (!pairing || pairing.status === 'pending') {
       return;
     }
 
-    const existingConversation = conversations.find((conversation) => conversation.pairing_id === pairing.id);
-    if (existingConversation) {
-      setChatTarget(match);
-      setChatPairingId(pairing.id);
-      setActiveConversationId(existingConversation.conversation_id);
+    navigate(buildMessagesRoute({ pairingId: pairing.id }));
+  };
+
+  const handleAcceptPairing = async (pairingId: string) => {
+    setPendingActionId(pairingId);
+    setPendingAction('accept');
+
+    try {
+      await updatePairingStatus(pairingId, 'active');
+      navigate(buildMessagesRoute({ pairingId }));
+    } catch (error) {
+      console.error('Error accepting pairing request:', error);
+    } finally {
+      setPendingActionId(null);
+      setPendingAction(null);
+    }
+  };
+
+  const handleDenyPairing = async (pairingId: string, matchName: string) => {
+    const shouldDeny = window.confirm(`Deny the pending request from ${matchName}?`);
+
+    if (!shouldDeny) {
       return;
     }
 
-    if (pairing.status === 'completed') {
-      console.error('Completed pairings can only open an existing archived conversation.');
-      return;
-    }
+    setPendingActionId(pairingId);
+    setPendingAction('deny');
 
-    const ensuredConversationId = await ensureConversation(pairing.id);
-    if (ensuredConversationId) {
-      setChatTarget(match);
-      setChatPairingId(pairing.id);
-      setActiveConversationId(ensuredConversationId);
+    try {
+      await deletePairing(pairingId);
+    } catch (error) {
+      console.error('Error denying pairing request:', error);
+    } finally {
+      setPendingActionId(null);
+      setPendingAction(null);
     }
   };
 
@@ -293,12 +316,10 @@ export default function Matching() {
           {filteredMatches.map((match, index) => {
             const matchId = match.id as string;
             const pairing = pairingsByMatchId.get(matchId);
-            const existingConversation = pairing
-              ? conversations.find((conversation) => conversation.pairing_id === pairing.id)
-              : null;
-            const canOpenArchivedHistory = pairing?.status === 'completed' ? Boolean(existingConversation) : true;
             const isConnected = Boolean(pairing);
             const isConnecting = connectingId === matchId;
+            const isPending = pairing?.status === 'pending';
+            const isProcessingPendingAction = pairing ? pendingActionId === pairing.id : false;
             const score = match.matchScore || 0;
             const scoreColor = score >= 60
               ? 'from-green-500 to-emerald-600'
@@ -389,14 +410,42 @@ export default function Matching() {
 
                   <div className="flex gap-2 pt-2 border-t border-outline-variant/10">
                     {isConnected ? (
-                      <button
-                        onClick={() => openChat(match)}
-                        disabled={!canOpenArchivedHistory}
-                        className="flex-1 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <MessageSquare size={14} />
-                        {pairing?.status === 'completed' ? 'View History' : 'Send Message'}
-                      </button>
+                      isPending && pairing ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void handleDenyPairing(pairing.id, match.name || 'this user')}
+                            disabled={isProcessingPendingAction}
+                            className="flex-1 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isProcessingPendingAction && pendingAction === 'deny' ? (
+                              <><Loader2 size={14} className="animate-spin" /> Denying...</>
+                            ) : (
+                              <><X size={14} /> Deny</>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleAcceptPairing(pairing.id)}
+                            disabled={isProcessingPendingAction}
+                            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-90 transition-all disabled:opacity-50"
+                          >
+                            {isProcessingPendingAction && pendingAction === 'accept' ? (
+                              <><Loader2 size={14} className="animate-spin" /> Accepting...</>
+                            ) : (
+                              <><Check size={14} /> Accept</>
+                            )}
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => openChat(match)}
+                          className="flex-1 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <MessageSquare size={14} />
+                          {pairing?.status === 'completed' ? 'View History' : 'Send Message'}
+                        </button>
+                      )
                     ) : (
                       <button
                         onClick={() => handleConnect(match)}

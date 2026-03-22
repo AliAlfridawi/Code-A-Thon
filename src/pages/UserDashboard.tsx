@@ -1,21 +1,22 @@
-import { useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import { motion } from 'motion/react';
 import {
   Sparkles, Users, CalendarDays, Handshake, MessageSquare,
-  Loader2, ExternalLink, Clock, ChevronRight, Star
+  Loader2, ExternalLink, Clock, ChevronRight, Star, Check, X
 } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import { useSupabase } from '../hooks/useSupabase';
 import { useUserProfile } from '../hooks/useUserProfile';
-import { useOnboardingStatus } from '../hooks/useOnboardingStatus';
-import { useMeetings, Meeting } from '../hooks/useMeetings';
+import { useMeetings } from '../hooks/useMeetings';
+import { buildMessagesRoute } from '../constants/routes';
 import { calculateMatches, MatchCandidate } from '../services/matchingService';
 
 export default function UserDashboard() {
   const { user } = useUser();
+  const navigate = useNavigate();
   const supabase = useSupabase();
   const { profile, role, loading: profileLoading } = useUserProfile();
   const { meetings, loading: meetingsLoading } = useMeetings();
@@ -24,11 +25,13 @@ export default function UserDashboard() {
   const [connections, setConnections] = useState<any[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [loadingConnections, setLoadingConnections] = useState(true);
+  const [actingConnectionId, setActingConnectionId] = useState<string | null>(null);
+  const [actingConnectionIntent, setActingConnectionIntent] = useState<'accept' | 'deny' | null>(null);
 
   // Fetch potential matches
   useEffect(() => {
     async function fetchMatches() {
-      if (!profile || !role) return;
+      if (!profile || !role || !user) return;
 
       const oppositeTable = role === 'mentor' ? 'mentees' : 'mentors';
       const { data, error } = await supabase.from(oppositeTable).select('*');
@@ -39,38 +42,102 @@ export default function UserDashboard() {
         return;
       }
 
-      const results = calculateMatches(profile as any, data, role);
+      const eligibleCandidates = (data ?? []).filter((candidate) => candidate.clerk_user_id !== user.id);
+      const results = calculateMatches(profile as any, eligibleCandidates, role);
       setMatches(results.slice(0, 5));
       setLoadingMatches(false);
     }
 
     fetchMatches();
+  }, [profile, role, supabase, user]);
+
+  const fetchConnections = useCallback(async () => {
+    if (!profile || !role) {
+      setConnections([]);
+      setLoadingConnections(false);
+      return;
+    }
+
+    setLoadingConnections(true);
+
+    const column = role === 'mentor' ? 'mentor_id' : 'mentee_id';
+    const joinTable = role === 'mentor' ? 'mentees' : 'mentors';
+
+    const { data, error } = await supabase
+      .from('pairings')
+      .select(`*, ${joinTable}(*)`)
+      .eq(column, profile.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching connections:', error);
+    } else {
+      setConnections(data || []);
+    }
+
+    setLoadingConnections(false);
   }, [profile, role, supabase]);
 
   // Fetch connections (pairings)
   useEffect(() => {
-    async function fetchConnections() {
-      if (!profile || !role) return;
+    void fetchConnections();
+  }, [fetchConnections]);
 
-      const column = role === 'mentor' ? 'mentor_id' : 'mentee_id';
-      const joinTable = role === 'mentor' ? 'mentees' : 'mentors';
-      const joinColumn = role === 'mentor' ? 'mentee_id' : 'mentor_id';
+  const handleAcceptConnection = useCallback(async (connectionId: string) => {
+    setActingConnectionId(connectionId);
+    setActingConnectionIntent('accept');
 
-      const { data, error } = await supabase
+    try {
+      const { error } = await supabase
         .from('pairings')
-        .select(`*, ${joinTable}(*)`)
-        .eq(column, profile.id);
+        .update({
+          status: 'active',
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq('id', connectionId);
 
       if (error) {
-        console.error('Error fetching connections:', error);
-      } else {
-        setConnections(data || []);
+        throw error;
       }
-      setLoadingConnections(false);
+
+      await fetchConnections();
+      navigate(buildMessagesRoute({ pairingId: connectionId }));
+    } catch (error) {
+      console.error('Error accepting pairing request:', error);
+    } finally {
+      setActingConnectionId(null);
+      setActingConnectionIntent(null);
+    }
+  }, [fetchConnections, navigate, supabase]);
+
+  const handleDenyConnection = useCallback(async (connectionId: string, partnerName: string) => {
+    const shouldDeny = window.confirm(`Deny the pending request from ${partnerName}?`);
+
+    if (!shouldDeny) {
+      return;
     }
 
-    fetchConnections();
-  }, [profile, role, supabase]);
+    setActingConnectionId(connectionId);
+    setActingConnectionIntent('deny');
+
+    try {
+      const { error } = await supabase
+        .from('pairings')
+        .delete()
+        .eq('id', connectionId);
+
+      if (error) {
+        throw error;
+      }
+
+      setConnections((current) => current.filter((connection) => connection.id !== connectionId));
+    } catch (error) {
+      console.error('Error denying pairing request:', error);
+    } finally {
+      setActingConnectionId(null);
+      setActingConnectionIntent(null);
+    }
+  }, [supabase]);
 
   const loading = profileLoading || loadingMatches || loadingConnections || meetingsLoading;
 
@@ -216,11 +283,14 @@ export default function UserDashboard() {
             <div className="space-y-3">
               {connections.map((conn: any, i: number) => {
                 const partner = role === 'mentor' ? conn.mentees : conn.mentors;
+                const partnerName = partner?.name || 'this user';
                 const statusColor = conn.status === 'active'
                   ? 'bg-green-100 text-green-700'
                   : conn.status === 'pending'
                     ? 'bg-amber-100 text-amber-700'
                     : 'bg-gray-100 text-gray-600';
+                const isPending = conn.status === 'pending';
+                const isActing = actingConnectionId === conn.id;
 
                 return (
                   <motion.div
@@ -241,9 +311,41 @@ export default function UserDashboard() {
                         {conn.status}
                       </span>
                     </div>
-                    <Link to="/messages" className="p-2 rounded-lg hover:bg-primary/10 transition-colors">
-                      <MessageSquare size={16} className="text-primary" />
-                    </Link>
+                    {isPending ? (
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleDenyConnection(conn.id, partnerName)}
+                            disabled={isActing}
+                            className="px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-[11px] font-bold hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isActing && actingConnectionIntent === 'deny' ? (
+                              <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Denying</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1"><X size={12} /> Deny</span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleAcceptConnection(conn.id)}
+                            disabled={isActing}
+                            className="px-3 py-1.5 rounded-lg bg-primary text-white text-[11px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isActing && actingConnectionIntent === 'accept' ? (
+                              <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> Accepting</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1"><Check size={12} /> Accept</span>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-on-surface-variant">Accept to open chat</p>
+                      </div>
+                    ) : (
+                      <Link to={buildMessagesRoute({ pairingId: conn.id })} className="p-2 rounded-lg hover:bg-primary/10 transition-colors">
+                        <MessageSquare size={16} className="text-primary" />
+                      </Link>
+                    )}
                   </motion.div>
                 );
               })}

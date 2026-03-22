@@ -1,6 +1,7 @@
 import { Bell } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { UserButton } from '@clerk/clerk-react';
+import { HELP_ROUTE } from '../constants/routes';
 
 export default function Header() {
   const linkClass = (isActive: boolean) =>
@@ -21,6 +22,7 @@ export default function Header() {
           <NavLink to="/" end className={({ isActive }) => linkClass(isActive)}>Dashboard</NavLink>
           <NavLink to="/messages" className={({ isActive }) => linkClass(isActive)}>Messages</NavLink>
           <NavLink to="/pairing" className={({ isActive }) => linkClass(isActive)}>Pairing</NavLink>
+          <NavLink to={HELP_ROUTE} className={({ isActive }) => linkClass(isActive)}>Help</NavLink>
         </div>
         
         <div className="flex items-center gap-4">

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from '../../hooks/useSupabase';
 import { UserRole } from '../Onboarding';
 import { calculateMatches, MatchCandidate } from '../../services/matchingService';
@@ -13,6 +14,7 @@ interface MatchResultsProps {
 }
 
 export function MatchResults({ role, formData }: MatchResultsProps) {
+  const { user } = useUser();
   const supabase = useSupabase();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -20,6 +22,11 @@ export function MatchResults({ role, formData }: MatchResultsProps) {
 
   useEffect(() => {
     async function fetchAndMatch() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       const oppositeTable = role === 'mentor' ? 'mentees' : 'mentors';
       const { data, error } = await supabase.from(oppositeTable).select('*');
 
@@ -29,13 +36,14 @@ export function MatchResults({ role, formData }: MatchResultsProps) {
         return;
       }
 
-      const results = calculateMatches(formData, data, role);
+      const eligibleCandidates = (data ?? []).filter((candidate) => candidate.clerk_user_id !== user.id);
+      const results = calculateMatches(formData, eligibleCandidates, role);
       setMatches(results.slice(0, 5));
       setLoading(false);
     }
 
     fetchAndMatch();
-  }, [role, formData, supabase]);
+  }, [formData, role, supabase, user]);
 
   if (loading) {
     return (

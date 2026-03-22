@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Send, Loader2, CalendarPlus, X } from 'lucide-react';
+import { Search, Send, Loader2, CalendarPlus, X, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useUser } from '@clerk/clerk-react';
+import { useSearchParams } from 'react-router-dom';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import { useMessages } from '../hooks/useMessages';
@@ -22,23 +23,29 @@ export default function Messages() {
     typingUserIds,
     sendMessage,
     sendTypingIndicator,
+    ensureConversation,
   } = useMessages();
   const { createMeeting } = useMeetings();
   const { profile, role } = useUserProfile();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [newMessage, setNewMessage] = useState('');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [meetingForm, setMeetingForm] = useState({ title: '', date: '', time: '', link: '', notes: '' });
   const [schedulingMeeting, setSchedulingMeeting] = useState(false);
+  const [isResolvingRequestedConversation, setIsResolvingRequestedConversation] = useState(false);
+  const [requestedConversationError, setRequestedConversationError] = useState<string | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const requestedPairingId = searchParams.get('pairing');
+  const requestedConversationId = searchParams.get('conversation');
 
   const isArchivedConversation = activeConversation?.pairing_status === 'completed';
   const isCounterpartOnline = activeConversation
-    ? onlineUserIds.has(activeConversation.counterpart_clerk_user_id)
+    ? activeConversation.counterpart_clerk_user_id !== null && onlineUserIds.has(activeConversation.counterpart_clerk_user_id)
     : false;
   const isCounterpartTyping = activeConversation
-    ? typingUserIds.has(activeConversation.counterpart_clerk_user_id)
+    ? activeConversation.counterpart_clerk_user_id !== null && typingUserIds.has(activeConversation.counterpart_clerk_user_id)
     : false;
 
   const filteredConversations = useMemo(
@@ -87,6 +94,99 @@ export default function Messages() {
   };
 
   useEffect(() => {
+    let isCancelled = false;
+
+    async function syncRequestedConversation() {
+      if (!requestedConversationId && !requestedPairingId) {
+        if (!isCancelled) {
+          setIsResolvingRequestedConversation(false);
+          setRequestedConversationError(null);
+        }
+        return;
+      }
+
+      if (!isCancelled) {
+        setIsResolvingRequestedConversation(true);
+        setRequestedConversationError(null);
+      }
+
+      if (loadingConversations) {
+        return;
+      }
+
+      if (requestedConversationId) {
+        const requestedConversation = conversations.find(
+          (conversation) => conversation.conversation_id === requestedConversationId
+        );
+
+        if (!requestedConversation) {
+          if (!isCancelled) {
+            setRequestedConversationError('We could not find that conversation.');
+            setIsResolvingRequestedConversation(false);
+          }
+          return;
+        }
+
+        if (!isCancelled) {
+          setActiveConversationId(requestedConversation.conversation_id);
+          setSearchParams(new URLSearchParams(), { replace: true });
+          setIsResolvingRequestedConversation(false);
+        }
+        return;
+      }
+
+      if (!requestedPairingId) {
+        if (!isCancelled) {
+          setIsResolvingRequestedConversation(false);
+        }
+        return;
+      }
+
+      const pairedConversation = conversations.find(
+        (conversation) => conversation.pairing_id === requestedPairingId
+      );
+
+      if (pairedConversation) {
+        if (!isCancelled) {
+          setActiveConversationId(pairedConversation.conversation_id);
+          setSearchParams(new URLSearchParams(), { replace: true });
+          setIsResolvingRequestedConversation(false);
+        }
+        return;
+      }
+
+      const { conversationId, error } = await ensureConversation(requestedPairingId);
+
+      if (isCancelled) {
+        return;
+      }
+
+      if (conversationId) {
+        setActiveConversationId(conversationId);
+        setSearchParams(new URLSearchParams(), { replace: true });
+      } else {
+        setRequestedConversationError(error || 'We could not start this conversation right now. Please try again.');
+      }
+
+      setIsResolvingRequestedConversation(false);
+    }
+
+    void syncRequestedConversation();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    conversations,
+    ensureConversation,
+    loadingConversations,
+    requestedConversationId,
+    requestedPairingId,
+    setActiveConversationId,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -117,9 +217,25 @@ export default function Messages() {
           </div>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {loadingConversations ? (
+            {loadingConversations && conversations.length === 0 ? (
               <div className="flex h-full items-center justify-center">
                 <Loader2 className="animate-spin text-primary" size={24} />
+              </div>
+            ) : isResolvingRequestedConversation && filteredConversations.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                <Loader2 className="animate-spin text-primary" size={24} />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-primary">Starting conversation...</p>
+                  <p className="text-xs text-on-surface-variant">We&apos;re opening your chat thread now.</p>
+                </div>
+              </div>
+            ) : requestedConversationError && filteredConversations.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                <AlertCircle className="text-amber-600" size={24} />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-primary">Conversation unavailable</p>
+                  <p className="text-xs text-on-surface-variant">{requestedConversationError}</p>
+                </div>
               </div>
             ) : filteredConversations.length === 0 ? (
               <div className="flex h-full items-center justify-center p-6 text-center text-sm text-on-surface-variant">
@@ -130,14 +246,19 @@ export default function Messages() {
                 const previewTime = new Date(
                   conversation.last_message_created_at ?? conversation.conversation_updated_at
                 ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const isOnline = onlineUserIds.has(conversation.counterpart_clerk_user_id);
-                const isTyping = typingUserIds.has(conversation.counterpart_clerk_user_id);
+                const isOnline = conversation.counterpart_clerk_user_id !== null && onlineUserIds.has(conversation.counterpart_clerk_user_id);
+                const isTyping = conversation.counterpart_clerk_user_id !== null && typingUserIds.has(conversation.counterpart_clerk_user_id);
 
                 return (
                   <motion.button
                     key={conversation.conversation_id}
                     whileHover={{ backgroundColor: 'rgba(0,32,69,0.04)' }}
-                    onClick={() => setActiveConversationId(conversation.conversation_id)}
+                    onClick={() => {
+                      setActiveConversationId(conversation.conversation_id);
+                      if (requestedConversationId || requestedPairingId) {
+                        setSearchParams(new URLSearchParams(), { replace: true });
+                      }
+                    }}
                     className={`w-full flex items-center gap-3 p-4 text-left transition-colors ${
                       activeConversationId === conversation.conversation_id ? 'bg-primary/5 border-l-3 border-primary' : ''
                     }`}
@@ -310,13 +431,46 @@ export default function Messages() {
                 animate={{ opacity: 1 }}
                 className="flex-1 flex flex-col items-center justify-center text-center p-8"
               >
-                <div className="w-20 h-20 rounded-full bg-surface-container-highest flex items-center justify-center mb-4">
-                  <Send size={28} className="text-on-surface-variant" />
-                </div>
-                <h3 className="font-headline font-bold text-primary mb-2">No Conversation Selected</h3>
-                <p className="text-sm text-on-surface-variant max-w-[280px]">
-                  Select a conversation from the list to start messaging.
-                </p>
+                {isResolvingRequestedConversation ? (
+                  <>
+                    <div className="w-20 h-20 rounded-full bg-surface-container-highest flex items-center justify-center mb-4">
+                      <Loader2 size={28} className="text-primary animate-spin" />
+                    </div>
+                    <h3 className="font-headline font-bold text-primary mb-2">Preparing Conversation</h3>
+                    <p className="text-sm text-on-surface-variant max-w-[280px]">
+                      We&apos;re setting up your chat so you can message your connection.
+                    </p>
+                  </>
+                ) : requestedConversationError ? (
+                  <>
+                    <div className="w-20 h-20 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+                      <AlertCircle size={28} className="text-amber-600" />
+                    </div>
+                    <h3 className="font-headline font-bold text-primary mb-2">Conversation Unavailable</h3>
+                    <p className="text-sm text-on-surface-variant max-w-[320px] mb-4">
+                      {requestedConversationError}
+                    </p>
+                    <button
+                      onClick={() => {
+                        setRequestedConversationError(null);
+                        setSearchParams(new URLSearchParams(), { replace: true });
+                      }}
+                      className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                    >
+                      Back to inbox
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-20 h-20 rounded-full bg-surface-container-highest flex items-center justify-center mb-4">
+                      <Send size={28} className="text-on-surface-variant" />
+                    </div>
+                    <h3 className="font-headline font-bold text-primary mb-2">No Conversation Selected</h3>
+                    <p className="text-sm text-on-surface-variant max-w-[280px]">
+                      Select a conversation from the list to start messaging.
+                    </p>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
