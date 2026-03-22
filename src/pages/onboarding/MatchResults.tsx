@@ -5,6 +5,7 @@ import { calculateMatches, MatchCandidate } from '../../services/matchingService
 import { Loader2, CheckCircle2, ArrowRight, Star, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { USER_DASHBOARD_ROUTE } from '../../constants/routes';
 
 interface MatchResultsProps {
   role: UserRole;
@@ -100,8 +101,8 @@ export function MatchResults({ role, formData }: MatchResultsProps) {
           You can now access your dashboard to connect with your matches and start your journey.
         </p>
         <button
-          onClick={() => navigate('/')}
-          className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-primary-foreground rounded-xl font-bold text-lg hover:opacity-90 transition-all shadow-lg shadow-primary/20 group"
+          onClick={() => navigate(USER_DASHBOARD_ROUTE)}
+          className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white rounded-xl font-bold text-lg hover:opacity-90 transition-all shadow-lg shadow-primary/20 group"
         >
           Go to Dashboard
           <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />

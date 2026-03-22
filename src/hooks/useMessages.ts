@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { RealtimeChannel } from '@supabase/supabase-js';
+import { useSupabase } from './useSupabase';
 import type { ConversationRow, ConversationMemberRow, MessageRow } from '../types';
 import { useUser } from '@clerk/clerk-react';
 
@@ -11,6 +12,7 @@ export type ConversationWithMembers = ConversationRow & {
 
 export function useMessages() {
   const { user } = useUser();
+  const authSupabase = useSupabase(); // Authenticated client for ALL operations
   const [conversations, setConversations] = useState<ConversationWithMembers[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -21,29 +23,49 @@ export function useMessages() {
   // Realtime Presence & Broadcast state
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
-  const [activeChannel, setActiveChannel] = useState<ReturnType<typeof supabase.channel> | null>(null);
+  const [activeChannel, setActiveChannel] = useState<RealtimeChannel | null>(null);
 
-  // Fetch all conversations
+  // Fetch all conversations for the current user
   useEffect(() => {
     async function fetchConversations() {
+      if (!user) return;
       try {
         setLoadingConversations(true);
-        // In a real app we'd filter by current user's membership.
-        // For this demo, we fetch all.
-        const { data: convos, error: convosErr } = await supabase
+
+        // 1. Find conversations where the current user is a member
+        const { data: myMemberships, error: memErr } = await authSupabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('member_name', user.fullName || 'You');
+
+        if (memErr) throw memErr;
+
+        if (!myMemberships || myMemberships.length === 0) {
+          setConversations([]);
+          setLoadingConversations(false);
+          return;
+        }
+
+        const validConvoIds = myMemberships.map(m => m.conversation_id);
+
+        // 2. Fetch those specific conversations
+        const { data: convos, error: convosErr } = await authSupabase
           .from('conversations')
           .select('*')
+          .in('id', validConvoIds)
           .order('updated_at', { ascending: false });
         if (convosErr) throw convosErr;
 
-        const { data: members, error: membersErr } = await supabase
+        const { data: members, error: membersErr } = await authSupabase
           .from('conversation_members')
-          .select('*');
+          .select('*')
+          .in('conversation_id', validConvoIds);
         if (membersErr) throw membersErr;
 
-        const { data: msgs, error: msgsErr } = await supabase
+        const { data: msgs, error: msgsErr } = await authSupabase
           .from('messages')
           .select('*')
+          .in('conversation_id', validConvoIds)
           .order('created_at', { ascending: false });
         if (msgsErr) throw msgsErr;
 
@@ -54,7 +76,7 @@ export function useMessages() {
             ...c,
             members: cMembers,
             lastMessage: cMsgs[0],
-            unreadCount: cMsgs.filter(m => !m.read_at && m.sender_type !== 'self').length
+            unreadCount: cMsgs.filter(m => !m.read_at && m.sender_type !== user.id).length
           };
         });
 
@@ -69,13 +91,13 @@ export function useMessages() {
       }
     }
     fetchConversations();
-  }, []);
+  }, [user, authSupabase]);
 
   // Fetch messages and subscribe to postgres changes + presence + broadcast
   useEffect(() => {
     if (!activeConversationId || !user) return;
 
-    let channel = supabase.channel(`room:${activeConversationId}`, {
+    let channel = authSupabase.channel(`room:${activeConversationId}`, {
       config: {
         presence: { key: user.id },
         broadcast: { ack: true }
@@ -86,7 +108,7 @@ export function useMessages() {
 
     async function fetchMessages() {
       setLoadingMessages(true);
-      const { data, error } = await supabase
+      const { data, error } = await authSupabase
         .from('messages')
         .select('*')
         .eq('conversation_id', activeConversationId)
@@ -96,9 +118,9 @@ export function useMessages() {
         setMessages(data as MessageRow[]);
         
         // Mark as read
-        const unreadIds = data.filter(m => !m.read_at && m.sender_type !== 'self').map(m => m.id);
+        const unreadIds = data.filter(m => !m.read_at && m.sender_type !== user.id).map(m => m.id);
         if (unreadIds.length > 0) {
-          await supabase.from('messages').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
+          await authSupabase.from('messages').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
         }
       }
       setLoadingMessages(false);
@@ -151,10 +173,10 @@ export function useMessages() {
     return () => {
       setOnlineUsers(new Set());
       setTypingUsers(new Set());
-      supabase.removeChannel(channel);
+      authSupabase.removeChannel(channel);
       setActiveChannel(null);
     };
-  }, [activeConversationId, user]);
+  }, [activeConversationId, user, authSupabase]);
 
   const sendMessage = async (content: string) => {
     if (!activeConversationId || !user) return;
@@ -163,18 +185,18 @@ export function useMessages() {
     sendTypingIndicator(false);
 
     try {
-      const { error } = await supabase.from('messages').insert([{
+      const { error } = await authSupabase.from('messages').insert([{
         conversation_id: activeConversationId,
         content,
         sender_name: user.fullName || 'You',
-        sender_type: 'self',
+        sender_type: user.id, // Store Clerk User ID directly
         read_at: new Date().toISOString() // Read immediately by sender
       }]);
       
       if (error) throw error;
       
       // Update conversation updated_at
-      await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConversationId);
+      await authSupabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConversationId);
     } catch (err) {
       console.error('Error sending message:', err);
     }

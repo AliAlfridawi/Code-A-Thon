@@ -1,18 +1,35 @@
-import { LayoutDashboard, MessageSquare, UserPlus, Users, Settings, HelpCircle, LogOut } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, UserPlus, Users, Settings, HelpCircle, LogOut, CalendarDays, Sparkles } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { useClerk } from '@clerk/clerk-react';
+import { useClerk, useUser } from '@clerk/clerk-react';
 
-const navItems = [
+const ADMIN_EMAIL = 'alfridawiali@gmail.com';
+
+// Admin-only nav items
+const adminNavItems = [
   { icon: LayoutDashboard, label: 'Dashboard', to: '/' },
-  { icon: MessageSquare, label: 'Messages', to: '/messages' },
-  { icon: UserPlus, label: 'Pairing', to: '/pairing' },
   { icon: Users, label: 'Members', to: '/members' },
+  { icon: UserPlus, label: 'Pairing (Admin)', to: '/admin-pairing' },
+  { icon: MessageSquare, label: 'Messages', to: '/messages' },
+  { icon: CalendarDays, label: 'Calendar', to: '/calendar' },
+  { icon: Settings, label: 'Settings', to: '/settings' },
+];
+
+// Regular user nav items
+const userNavItems = [
+  { icon: LayoutDashboard, label: 'My Dashboard', to: '/my-dashboard' },
+  { icon: Sparkles, label: 'Matching', to: '/pairing' },
+  { icon: MessageSquare, label: 'Messages', to: '/messages' },
+  { icon: CalendarDays, label: 'Calendar', to: '/calendar' },
   { icon: Settings, label: 'Settings', to: '/settings' },
 ];
 
 export default function Sidebar() {
   const { signOut } = useClerk();
+  const { user } = useUser();
+
+  const isAdmin = user?.primaryEmailAddress?.emailAddress === ADMIN_EMAIL;
+  const navItems = isAdmin ? adminNavItems : userNavItems;
 
   return (
     <aside className="h-screen w-64 sticky top-0 bg-surface-container-low flex flex-col py-6 font-headline text-sm font-medium">
@@ -26,7 +43,7 @@ export default function Sidebar() {
           <NavLink
             key={item.label}
             to={item.to}
-            end={item.to === '/'}
+            end={item.to === '/' || item.to === '/my-dashboard'}
           >
             {({ isActive }) => (
               <motion.div
@@ -61,4 +78,3 @@ export default function Sidebar() {
     </aside>
   );
 }
-

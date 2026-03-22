@@ -1,11 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Send, Paperclip, MoreVertical, Phone, Video, Loader2 } from 'lucide-react';
+import { Search, Send, Paperclip, MoreVertical, Phone, Video, Loader2, CalendarPlus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import { useMessages } from '../hooks/useMessages';
+import { useMeetings } from '../hooks/useMeetings';
+import { useUserProfile } from '../hooks/useUserProfile';
+
+import { useUser } from '@clerk/clerk-react';
 
 export default function Messages() {
+  const { user } = useUser();
   const {
     conversations,
     messages,
@@ -19,8 +24,14 @@ export default function Messages() {
     sendTypingIndicator
   } = useMessages();
   
+  const { createMeeting } = useMeetings();
+  const { profile, role } = useUserProfile();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [newMessage, setNewMessage] = useState('');
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [meetingForm, setMeetingForm] = useState({ title: '', date: '', time: '', link: '', notes: '' });
+  const [schedulingMeeting, setSchedulingMeeting] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const activeConvo = conversations.find((c) => c.id === activeConversationId);
@@ -175,6 +186,13 @@ export default function Messages() {
                     <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
                       <Video size={16} className="text-on-surface-variant" />
                     </button>
+                    <button
+                      onClick={() => setShowScheduleModal(true)}
+                      className="p-2 rounded-xl hover:bg-primary/10 transition-colors group"
+                      title="Schedule a meeting"
+                    >
+                      <CalendarPlus size={16} className="text-primary group-hover:scale-110 transition-transform" />
+                    </button>
                     <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
                       <MoreVertical size={16} className="text-on-surface-variant" />
                     </button>
@@ -189,6 +207,7 @@ export default function Messages() {
                     </div>
                   ) : messages.map((msg, i) => {
                     const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const isSelf = msg.sender_type === user?.id; // Identify own message by Clerk ID
                     
                     return (
                       <motion.div
@@ -196,17 +215,17 @@ export default function Messages() {
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.04, duration: 0.25 }}
-                        className={`flex ${msg.sender_type === 'self' ? 'justify-end' : 'justify-start'}`}
+                        className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}
                       >
                         <div
                           className={`max-w-[70%] p-3.5 rounded-2xl text-sm leading-relaxed ${
-                            msg.sender_type === 'self'
+                            isSelf
                               ? 'bg-primary text-white rounded-br-lg shadow-md shadow-primary/10'
                               : 'bg-surface-container-low text-on-surface rounded-bl-lg border border-outline-variant/5'
                           }`}
                         >
                           <p>{msg.content}</p>
-                          <p className={`text-[10px] mt-1.5 ${msg.sender_type === 'self' ? 'text-white/60' : 'text-on-surface-variant/60'}`}>
+                          <p className={`text-[10px] mt-1.5 ${isSelf ? 'text-white/60' : 'text-on-surface-variant/60'}`}>
                             {timeStr}
                           </p>
                         </div>
@@ -275,6 +294,130 @@ export default function Messages() {
           </AnimatePresence>
         </section>
       </div>
+
+      {/* Schedule Meeting Modal */}
+      <AnimatePresence>
+        {showScheduleModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowScheduleModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-outline-variant/10"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-headline font-bold text-lg text-primary">Schedule a Meeting</h3>
+                <button onClick={() => setShowScheduleModal(false)} className="p-1.5 rounded-lg hover:bg-surface-container-low transition-colors">
+                  <X size={18} className="text-on-surface-variant" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!meetingForm.title || !meetingForm.date || !meetingForm.time) return;
+                  setSchedulingMeeting(true);
+
+                  const scheduledAt = new Date(`${meetingForm.date}T${meetingForm.time}`);
+
+                  await createMeeting({
+                    pairing_id: null,
+                    mentor_id: role === 'mentor' ? profile?.id || null : null,
+                    mentee_id: role === 'mentee' ? profile?.id || null : null,
+                    title: meetingForm.title,
+                    meeting_link: meetingForm.link || null,
+                    scheduled_at: scheduledAt.toISOString(),
+                    duration_minutes: 30,
+                    notes: meetingForm.notes || null,
+                  });
+
+                  const dateStr = scheduledAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                  const timeStr = scheduledAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                  const meetingMsg = `📅 Meeting scheduled: ${meetingForm.title} on ${dateStr} at ${timeStr}${meetingForm.link ? ` — ${meetingForm.link}` : ''}`;
+                  await sendMessage(meetingMsg);
+
+                  setMeetingForm({ title: '', date: '', time: '', link: '', notes: '' });
+                  setShowScheduleModal(false);
+                  setSchedulingMeeting(false);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-on-surface-variant mb-1.5">Meeting Title *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Weekly check-in"
+                    value={meetingForm.title}
+                    onChange={e => setMeetingForm({ ...meetingForm, title: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-on-surface-variant mb-1.5">Date *</label>
+                    <input
+                      required
+                      type="date"
+                      value={meetingForm.date}
+                      onChange={e => setMeetingForm({ ...meetingForm, date: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-on-surface-variant mb-1.5">Time *</label>
+                    <input
+                      required
+                      type="time"
+                      value={meetingForm.time}
+                      onChange={e => setMeetingForm({ ...meetingForm, time: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-on-surface-variant mb-1.5">Meeting Link (Google Meet / Teams)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. meet.google.com/abc-defg-hij"
+                    value={meetingForm.link}
+                    onChange={e => setMeetingForm({ ...meetingForm, link: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-on-surface-variant mb-1.5">Notes</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Any agenda items or notes..."
+                    value={meetingForm.notes}
+                    onChange={e => setMeetingForm({ ...meetingForm, notes: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={schedulingMeeting}
+                  className="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                >
+                  {schedulingMeeting ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Scheduling...</>
+                  ) : (
+                    <><CalendarPlus size={16} /> Schedule Meeting</>
+                  )}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageTransition>
   );
 }

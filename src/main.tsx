@@ -5,6 +5,8 @@ import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/cle
 import App from './App';
 import Dashboard from './pages/Dashboard';
 import Pairing from './pages/Pairing';
+import Matching from './pages/Matching';
+import Calendar from './pages/Calendar';
 import Messages from './pages/Messages';
 import Members from './pages/Members';
 import Settings from './pages/Settings';
@@ -12,7 +14,14 @@ import SignInPage from './pages/SignIn';
 import SignUpPage from './pages/SignUp';
 import Onboarding from './pages/Onboarding';
 import { OnboardingGuard } from './components/OnboardingGuard';
+import UserDashboard from './pages/UserDashboard';
 import { AdminGuard } from './components/AdminGuard';
+import {
+  ONBOARDING_ROUTE,
+  SIGN_IN_ROUTE,
+  SIGN_UP_ROUTE,
+  USER_DASHBOARD_ROUTE_SEGMENT,
+} from './constants/routes';
 import './index.css';
 
 const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -23,16 +32,19 @@ if (!clerkPubKey) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ClerkProvider publishableKey={clerkPubKey}>
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      signUpForceRedirectUrl={ONBOARDING_ROUTE}
+    >
       <BrowserRouter>
         <Routes>
           {/* Public auth routes */}
-          <Route path="/sign-in/*" element={<SignInPage />} />
-          <Route path="/sign-up/*" element={<SignUpPage />} />
+          <Route path={`${SIGN_IN_ROUTE}/*`} element={<SignInPage />} />
+          <Route path={`${SIGN_UP_ROUTE}/*`} element={<SignUpPage />} />
 
           {/* Onboarding route */}
           <Route
-            path="/onboarding"
+            path={ONBOARDING_ROUTE}
             element={
               <>
                 <SignedIn>
@@ -63,7 +75,11 @@ createRoot(document.getElementById('root')!).render(
             }
           >
             <Route index element={<AdminGuard><Dashboard /></AdminGuard>} />
-            <Route path="pairing" element={<Pairing />} />
+            <Route path={USER_DASHBOARD_ROUTE_SEGMENT} element={<UserDashboard />} />
+            <Route path="pairing" element={<Matching />} />
+            <Route path="matching" element={<Matching />} />
+            <Route path="admin-pairing" element={<Pairing />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="messages" element={<Messages />} />
             <Route path="members" element={<Members />} />
             <Route path="settings" element={<Settings />} />

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from '../../hooks/useSupabase';
+import { markOnboardingComplete } from '../../hooks/useOnboardingStatus';
 import { UserRole } from '../Onboarding';
 import { Loader2, Plus, X } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -101,6 +102,9 @@ export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
         }, { onConflict: 'clerk_user_id' });
 
       if (profileError) throw profileError;
+
+      // Warm the onboarding cache so the guard doesn't redirect back
+      markOnboardingComplete(role);
 
       onComplete(payload);
     } catch (err) {
