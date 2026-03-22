@@ -220,6 +220,14 @@ export interface Database {
           unread_count: number
         }[]
       }
+      mark_conversation_read: {
+        Args: {
+          conversation_id: string
+        }
+        Returns: {
+          read_at: string
+        }[]
+      }
     }
   }
 }

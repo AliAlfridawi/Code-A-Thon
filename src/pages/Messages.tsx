@@ -24,6 +24,8 @@ export default function Messages() {
     sendMessage,
     sendTypingIndicator,
     ensureConversation,
+    conversationLoadError,
+    messagingDebugState,
   } = useMessages();
   const { createMeeting } = useMeetings();
   const { profile, role } = useUserProfile();
@@ -36,9 +38,11 @@ export default function Messages() {
   const [schedulingMeeting, setSchedulingMeeting] = useState(false);
   const [isResolvingRequestedConversation, setIsResolvingRequestedConversation] = useState(false);
   const [requestedConversationError, setRequestedConversationError] = useState<string | null>(null);
+  const [requestedConversationDebugMessage, setRequestedConversationDebugMessage] = useState<string | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const requestedPairingId = searchParams.get('pairing');
   const requestedConversationId = searchParams.get('conversation');
+  const isDev = import.meta.env.DEV;
 
   const isArchivedConversation = activeConversation?.pairing_status === 'completed';
   const isCounterpartOnline = activeConversation
@@ -101,6 +105,7 @@ export default function Messages() {
         if (!isCancelled) {
           setIsResolvingRequestedConversation(false);
           setRequestedConversationError(null);
+          setRequestedConversationDebugMessage(null);
         }
         return;
       }
@@ -108,6 +113,7 @@ export default function Messages() {
       if (!isCancelled) {
         setIsResolvingRequestedConversation(true);
         setRequestedConversationError(null);
+        setRequestedConversationDebugMessage(null);
       }
 
       if (loadingConversations) {
@@ -122,6 +128,7 @@ export default function Messages() {
         if (!requestedConversation) {
           if (!isCancelled) {
             setRequestedConversationError('We could not find that conversation.');
+            setRequestedConversationDebugMessage(null);
             setIsResolvingRequestedConversation(false);
           }
           return;
@@ -155,7 +162,7 @@ export default function Messages() {
         return;
       }
 
-      const { conversationId, error } = await ensureConversation(requestedPairingId);
+      const { conversationId, error, debugMessage } = await ensureConversation(requestedPairingId);
 
       if (isCancelled) {
         return;
@@ -166,6 +173,7 @@ export default function Messages() {
         setSearchParams(new URLSearchParams(), { replace: true });
       } else {
         setRequestedConversationError(error || 'We could not start this conversation right now. Please try again.');
+        setRequestedConversationDebugMessage(debugMessage);
       }
 
       setIsResolvingRequestedConversation(false);
@@ -201,6 +209,15 @@ export default function Messages() {
         description="Stay connected with your mentors and mentees."
       />
 
+      {isDev && messagingDebugState && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          <p className="font-semibold">Messaging debug</p>
+          <p className="mt-1 break-words">
+            <span className="font-medium">{messagingDebugState.source}:</span> {messagingDebugState.message}
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-280px)]">
         <section className="bg-surface-container-lowest rounded-3xl border border-outline-variant/10 flex flex-col overflow-hidden">
           <div className="p-4 border-b border-outline-variant/10">
@@ -235,6 +252,19 @@ export default function Messages() {
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-primary">Conversation unavailable</p>
                   <p className="text-xs text-on-surface-variant">{requestedConversationError}</p>
+                  {isDev && requestedConversationDebugMessage && (
+                    <p className="rounded-xl bg-surface-container-low px-3 py-2 text-left font-mono text-[11px] text-on-surface-variant">
+                      {requestedConversationDebugMessage}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : conversationLoadError && filteredConversations.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                <AlertCircle className="text-amber-600" size={24} />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-primary">Inbox unavailable</p>
+                  <p className="text-xs text-on-surface-variant">{conversationLoadError}</p>
                 </div>
               </div>
             ) : filteredConversations.length === 0 ? (
@@ -450,15 +480,31 @@ export default function Messages() {
                     <p className="text-sm text-on-surface-variant max-w-[320px] mb-4">
                       {requestedConversationError}
                     </p>
+                    {isDev && requestedConversationDebugMessage && (
+                      <p className="mb-4 max-w-[360px] rounded-2xl bg-surface-container-low px-3 py-2 text-left font-mono text-[11px] text-on-surface-variant">
+                        {requestedConversationDebugMessage}
+                      </p>
+                    )}
                     <button
                       onClick={() => {
                         setRequestedConversationError(null);
+                        setRequestedConversationDebugMessage(null);
                         setSearchParams(new URLSearchParams(), { replace: true });
                       }}
                       className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
                     >
                       Back to inbox
                     </button>
+                  </>
+                ) : conversationLoadError ? (
+                  <>
+                    <div className="w-20 h-20 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+                      <AlertCircle size={28} className="text-amber-600" />
+                    </div>
+                    <h3 className="font-headline font-bold text-primary mb-2">Inbox Unavailable</h3>
+                    <p className="text-sm text-on-surface-variant max-w-[320px]">
+                      {conversationLoadError}
+                    </p>
                   </>
                 ) : (
                   <>

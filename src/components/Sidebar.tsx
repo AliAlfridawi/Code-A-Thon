@@ -33,7 +33,7 @@ export default function Sidebar() {
   const navItems = isAdmin ? adminNavItems : userNavItems;
 
   return (
-    <aside className="h-screen w-64 sticky top-0 bg-surface-container-low flex flex-col py-6 font-headline text-sm font-medium">
+    <aside className="sticky top-0 flex h-screen w-[var(--app-sidebar-width)] flex-col bg-surface-container-low py-[var(--app-sidebar-py)] font-headline text-sm font-medium">
       <div className="px-6 mb-8">
         <h2 className="text-lg font-extrabold tracking-tighter text-primary uppercase">Editorial Hub</h2>
         <p className="text-xs text-primary/70">Academic Excellence</p>
@@ -52,7 +52,7 @@ export default function Sidebar() {
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
                   isActive
                     ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                    : 'text-primary/70 hover:bg-white/50'
+                    : 'text-primary/70 hover:bg-surface-container-lowest/70'
                 }`}
               >
                 <item.icon size={20} />
@@ -70,7 +70,7 @@ export default function Sidebar() {
               className={`flex items-center gap-3 px-4 py-2 rounded-xl transition-all duration-300 ${
                 isActive
                   ? 'bg-primary/10 text-primary'
-                  : 'text-primary/70 hover:bg-white/50'
+                  : 'text-primary/70 hover:bg-surface-container-lowest/70'
               }`}
             >
               <HelpCircle size={20} />

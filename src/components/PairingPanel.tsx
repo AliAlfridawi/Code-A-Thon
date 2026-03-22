@@ -77,7 +77,7 @@ export default function PairingPanel({ selectedMentor, selectedMentee, compatibi
               className="w-full space-y-6"
             >
               {selectedMentor && (
-                <div className="p-4 bg-white rounded-2xl shadow-sm border border-outline-variant/10">
+                <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-4 shadow-sm">
                   <div className="flex items-center gap-3 mb-3">
                     <img src={selectedMentor.avatar} className="w-10 h-10 rounded-lg object-cover" alt="" />
                     <div className="text-left">
@@ -104,7 +104,7 @@ export default function PairingPanel({ selectedMentor, selectedMentee, compatibi
               )}
 
               {selectedMentee && (
-                <div className="p-4 bg-white rounded-2xl shadow-sm border border-outline-variant/10">
+                <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-4 shadow-sm">
                   <div className="flex items-center gap-3 mb-3">
                     <img src={selectedMentee.avatar} className="w-10 h-10 rounded-lg object-cover" alt="" />
                     <div className="text-left">

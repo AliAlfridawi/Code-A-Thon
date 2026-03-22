@@ -1,4 +1,4 @@
-import { User, Bell, Palette, Shield, Save, Camera, Loader2 } from 'lucide-react';
+import { User, Bell, Palette, Shield, Camera, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
@@ -7,14 +7,17 @@ import { useUser } from '@clerk/clerk-react';
 
 interface ToggleProps {
   enabled: boolean;
+  label: string;
   onToggle: () => void;
 }
 
-function Toggle({ enabled, onToggle }: ToggleProps) {
+function Toggle({ enabled, label, onToggle }: ToggleProps) {
   return (
     <button
       type="button"
+      role="switch"
       onClick={onToggle}
+      aria-label={label}
       aria-pressed={enabled}
       className={`relative w-11 h-6 rounded-full transition-colors ${
         enabled ? 'bg-primary' : 'bg-surface-container-highest'
@@ -80,7 +83,7 @@ export default function Settings() {
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
         {/* Navigation */}
         <nav className="xl:col-span-1">
-          <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 p-2 space-y-1 sticky top-24">
+          <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 p-2 space-y-1 sticky top-[calc(var(--app-header-height)+1.5rem)]">
             {sections.map((section) => (
               <a
                 key={section.id}
@@ -172,6 +175,7 @@ export default function Settings() {
                     <p className="text-xs text-on-surface-variant mt-0.5">{item.desc}</p>
                   </div>
                   <Toggle 
+                    label={item.label}
                     enabled={!!settings[item.key as keyof typeof settings]} 
                     onToggle={() => updateSetting(item.key as keyof typeof settings, !settings[item.key as keyof typeof settings])} 
                   />
@@ -198,6 +202,7 @@ export default function Settings() {
                   <p className="text-xs text-on-surface-variant mt-0.5">Switch to a darker color scheme</p>
                 </div>
                 <Toggle 
+                  label="Dark mode"
                   enabled={!!settings.dark_mode} 
                   onToggle={() => updateSetting('dark_mode', !settings.dark_mode)} 
                 />
@@ -208,6 +213,7 @@ export default function Settings() {
                   <p className="text-xs text-on-surface-variant mt-0.5">Reduce spacing and card sizes</p>
                 </div>
                 <Toggle 
+                  label="Compact view"
                   enabled={!!settings.compact_view} 
                   onToggle={() => updateSetting('compact_view', !settings.compact_view)} 
                 />
@@ -236,17 +242,15 @@ export default function Settings() {
             </div>
           </motion.section>
 
-          {/* Save Button (Optional since toggles auto-save) */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.45, duration: 0.35 }}
             className="flex justify-end"
           >
-            <button className="px-8 py-3.5 bg-gradient-to-r from-primary to-primary-container text-white font-bold rounded-2xl shadow-lg shadow-primary/20 flex items-center gap-2 active:scale-95 transition-transform hover:shadow-xl">
-              <Save size={18} />
-              Save Preferences
-            </button>
+            <p className="rounded-2xl border border-outline-variant/10 bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
+              Preferences auto-save as soon as you toggle them.
+            </p>
           </motion.div>
         </div>
       </div>

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { useUser } from '@clerk/clerk-react';
-import { useSupabase } from './useSupabase';
+import { useSession, useUser } from '@clerk/clerk-react';
+import {
+  getSupabaseAuthDebugMessage,
+  getSupabaseAuthDiagnostics,
+  getSupabaseAuthUserMessage,
+  useSupabase,
+} from './useSupabase';
 import type { MessageRow } from '../types';
 import type { Database } from '../types/database.types';
 
@@ -9,6 +14,55 @@ export type ConversationSummary = Database['public']['Functions']['get_my_conver
 export interface EnsureConversationResult {
   conversationId: string | null;
   error: string | null;
+  debugMessage: string | null;
+}
+
+export interface MessagingDebugState {
+  source: string;
+  message: string;
+}
+
+const CONVERSATION_REFRESH_RETRY_DELAY_MS = 200;
+const CONVERSATION_REFRESH_MAX_ATTEMPTS = 4;
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function getEnsureConversationErrorMessage(errorMessage?: string | null) {
+  if (!errorMessage) {
+    return 'Could not start this conversation right now.';
+  }
+
+  if (errorMessage.includes('Authentication required')) {
+    return 'You must be signed in to start a conversation.';
+  }
+
+  if (errorMessage.includes('Pairing not found')) {
+    return 'We could not find that mentorship pairing.';
+  }
+
+  if (errorMessage.includes('Not allowed to access this pairing conversation')) {
+    return 'You do not have access to this conversation.';
+  }
+
+  if (errorMessage.includes('Pairing participants must complete onboarding before messaging is available')) {
+    return 'Messaging becomes available after both profiles finish onboarding.';
+  }
+
+  if (errorMessage.includes('Cannot create a conversation for a completed pairing')) {
+    return 'This pairing is archived, so new messages cannot be started.';
+  }
+
+  if (errorMessage.includes('Completed pairing has no existing conversation')) {
+    return 'This pairing is archived and does not have an existing conversation history.';
+  }
+
+  if (errorMessage.includes('Conversation created but not yet available')) {
+    return 'We created the conversation, but it is not available in your inbox yet. Please try again.';
+  }
+
+  return 'Could not start this conversation right now. Please try again.';
 }
 
 function upsertMessage(list: MessageRow[], message: MessageRow) {
@@ -53,21 +107,54 @@ function updateConversationWithMessage(
 
 export function useMessages() {
   const { user } = useUser();
+  const { session } = useSession();
   const supabase = useSupabase();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
+  const [messagingDebugState, setMessagingDebugState] = useState<MessagingDebugState | null>(null);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
   const [activeChannel, setActiveChannel] = useState<RealtimeChannel | null>(null);
   const refreshRequestIdRef = useRef(0);
+  const messageRequestIdRef = useRef(0);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.conversation_id === activeConversationId) ?? null,
     [conversations, activeConversationId]
   );
+
+  const setDebugState = useCallback((source: string, message: string) => {
+    setMessagingDebugState({ source, message });
+
+    if (import.meta.env.DEV) {
+      console.error(`[messages:${source}] ${message}`);
+    }
+  }, []);
+
+  const ensureSupabaseMessagingAuth = useCallback(async (source: string) => {
+    if (!user) {
+      return null;
+    }
+
+    const diagnostics = await getSupabaseAuthDiagnostics(session, user.id);
+    const userMessage = getSupabaseAuthUserMessage(diagnostics);
+
+    if (!userMessage) {
+      return null;
+    }
+
+    const debugMessage = getSupabaseAuthDebugMessage(diagnostics) ?? 'Unknown Clerk-to-Supabase auth bridge failure.';
+    setDebugState(source, debugMessage);
+
+    return {
+      userMessage,
+      debugMessage,
+    };
+  }, [session, setDebugState, user]);
 
   const refreshConversations = useCallback(async () => {
     const requestId = ++refreshRequestIdRef.current;
@@ -76,12 +163,26 @@ export function useMessages() {
       if (requestId === refreshRequestIdRef.current) {
         setConversations([]);
         setActiveConversationId(null);
+        setConversationLoadError(null);
         setLoadingConversations(false);
       }
       return [];
     }
 
     setLoadingConversations(true);
+    setConversationLoadError(null);
+
+    const authIssue = await ensureSupabaseMessagingAuth('get_my_conversations');
+
+    if (authIssue) {
+      if (requestId === refreshRequestIdRef.current) {
+        setConversations([]);
+        setActiveConversationId(null);
+        setConversationLoadError(authIssue.userMessage);
+        setLoadingConversations(false);
+      }
+      return [];
+    }
 
     const { data, error } = await supabase.rpc('get_my_conversations');
 
@@ -90,13 +191,18 @@ export function useMessages() {
     }
 
     if (error) {
-      console.error('Error loading conversations:', error);
+      setConversationLoadError('Could not load your inbox right now. Please try again.');
+      setDebugState(
+        'get_my_conversations',
+        [error.message, error.details, error.hint, error.code].filter(Boolean).join(' | ')
+      );
       setLoadingConversations(false);
       return [];
     }
 
     const nextConversations = data ?? [];
     setConversations(nextConversations);
+    setConversationLoadError(null);
     setActiveConversationId((current) => {
       if (current && nextConversations.some((conversation) => conversation.conversation_id === current)) {
         return current;
@@ -106,24 +212,26 @@ export function useMessages() {
     });
     setLoadingConversations(false);
     return nextConversations;
-  }, [supabase, user]);
+  }, [ensureSupabaseMessagingAuth, setDebugState, supabase, user]);
 
   const markConversationRead = useCallback(async (conversationId: string) => {
     if (!user) {
       return;
     }
 
-    const readAt = new Date().toISOString();
-    const { error } = await supabase
-      .from('conversation_members')
-      .update({ last_read_at: readAt })
-      .eq('conversation_id', conversationId)
-      .eq('clerk_user_id', user.id);
+    const { data, error } = await supabase
+      .rpc('mark_conversation_read', { conversation_id: conversationId })
+      .single();
 
     if (error) {
-      console.error('Error marking conversation as read:', error);
+      setDebugState(
+        'mark_conversation_read',
+        [error.message, error.details, error.hint, error.code].filter(Boolean).join(' | ')
+      );
       return;
     }
+
+    const readAt = data?.read_at ?? new Date().toISOString();
 
     setConversations((current) =>
       current.map((conversation) =>
@@ -136,9 +244,10 @@ export function useMessages() {
           : conversation
       )
     );
-  }, [supabase, user]);
+  }, [setDebugState, supabase, user]);
 
   const fetchMessages = useCallback(async (conversationId: string) => {
+    const requestId = ++messageRequestIdRef.current;
     setLoadingMessages(true);
 
     const { data, error } = await supabase
@@ -147,8 +256,12 @@ export function useMessages() {
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
 
+    if (requestId !== messageRequestIdRef.current) {
+      return;
+    }
+
     if (error) {
-      console.error('Error loading messages:', error);
+      setDebugState('messages.select', [error.message, error.details, error.hint, error.code].filter(Boolean).join(' | '));
       setMessages([]);
       setLoadingMessages(false);
       return;
@@ -157,7 +270,7 @@ export function useMessages() {
     setMessages(data ?? []);
     setLoadingMessages(false);
     await markConversationRead(conversationId);
-  }, [markConversationRead, supabase]);
+  }, [markConversationRead, setDebugState, supabase]);
 
   const sendTypingIndicator = useCallback(async (isTyping: boolean) => {
     if (!activeChannel || !user) {
@@ -199,7 +312,7 @@ export function useMessages() {
       .single();
 
     if (error) {
-      console.error('Error sending message:', error);
+      setDebugState('messages.insert', [error.message, error.details, error.hint, error.code].filter(Boolean).join(' | '));
       return null;
     }
 
@@ -213,13 +326,24 @@ export function useMessages() {
 
     setConversations((current) => updateConversationWithMessage(current, data, user.id, activeConversationId));
     return data;
-  }, [activeConversationId, sendTypingIndicator, supabase, user]);
+  }, [activeConversationId, sendTypingIndicator, setDebugState, supabase, user]);
 
   const ensureConversation = useCallback(async (pairingId: string): Promise<EnsureConversationResult> => {
     if (!user) {
       return {
         conversationId: null,
         error: 'You must be signed in to start a conversation.',
+        debugMessage: null,
+      };
+    }
+
+    const authIssue = await ensureSupabaseMessagingAuth('ensure_pairing_conversation');
+
+    if (authIssue) {
+      return {
+        conversationId: null,
+        error: authIssue.userMessage,
+        debugMessage: authIssue.debugMessage,
       };
     }
 
@@ -228,29 +352,50 @@ export function useMessages() {
       .single();
 
     if (error) {
-      if (import.meta.env.DEV) {
-        console.error(`Error ensuring pairing conversation for pairing ${pairingId}:`, error);
-      }
+      const debugMessage = [error.message, error.details, error.hint, error.code].filter(Boolean).join(' | ');
+      setDebugState('ensure_pairing_conversation', `pairing_id=${pairingId} | ${debugMessage}`);
 
       return {
         conversationId: null,
-        error: error.message || 'Could not start this conversation right now.',
+        error: getEnsureConversationErrorMessage(error.message),
+        debugMessage,
       };
     }
 
-    const nextConversations = await refreshConversations();
     const ensuredConversationId = data.conversation_id;
+    let resolvedConversation: ConversationSummary | undefined;
 
-    setActiveConversationId(
-      nextConversations.find((conversation) => conversation.conversation_id === ensuredConversationId)?.conversation_id
-        ?? ensuredConversationId
-    );
+    for (let attempt = 0; attempt < CONVERSATION_REFRESH_MAX_ATTEMPTS; attempt += 1) {
+      const nextConversations = await refreshConversations();
+      resolvedConversation = nextConversations.find(
+        (conversation) => conversation.conversation_id === ensuredConversationId
+      );
+
+      if (resolvedConversation) {
+        break;
+      }
+
+      if (attempt < CONVERSATION_REFRESH_MAX_ATTEMPTS - 1) {
+        await wait(CONVERSATION_REFRESH_RETRY_DELAY_MS * (attempt + 1));
+      }
+    }
+
+    if (!resolvedConversation) {
+      return {
+        conversationId: null,
+        error: getEnsureConversationErrorMessage('Conversation created but not yet available'),
+        debugMessage: 'Conversation RPC returned an ID, but get_my_conversations never returned the conversation during the retry window.',
+      };
+    }
+
+    setActiveConversationId(resolvedConversation.conversation_id);
 
     return {
-      conversationId: ensuredConversationId,
+      conversationId: resolvedConversation.conversation_id,
       error: null,
+      debugMessage: null,
     };
-  }, [refreshConversations, supabase, user]);
+  }, [ensureSupabaseMessagingAuth, refreshConversations, setDebugState, supabase, user]);
 
   useEffect(() => {
     void refreshConversations();
@@ -259,6 +404,7 @@ export function useMessages() {
   useEffect(() => {
     if (!user) {
       setMessages([]);
+      messageRequestIdRef.current += 1;
       return;
     }
 
@@ -266,6 +412,7 @@ export function useMessages() {
       setMessages([]);
       setTypingUserIds(new Set());
       setOnlineUserIds(new Set());
+      messageRequestIdRef.current += 1;
       return;
     }
 
@@ -394,5 +541,7 @@ export function useMessages() {
     refreshConversations,
     ensureConversation,
     markConversationRead,
+    conversationLoadError,
+    messagingDebugState,
   };
 }

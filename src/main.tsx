@@ -18,6 +18,7 @@ import Onboarding from './pages/Onboarding';
 import { OnboardingGuard } from './components/OnboardingGuard';
 import UserDashboard from './pages/UserDashboard';
 import { AdminGuard } from './components/AdminGuard';
+import { SettingsProvider } from './hooks/useSettings';
 import {
   ONBOARDING_ROUTE,
   SIGN_IN_ROUTE,
@@ -67,7 +68,9 @@ createRoot(document.getElementById('root')!).render(
               <>
                 <SignedIn>
                   <OnboardingGuard>
-                    <App />
+                    <SettingsProvider>
+                      <App />
+                    </SettingsProvider>
                   </OnboardingGuard>
                 </SignedIn>
                 <SignedOut>

@@ -291,6 +291,7 @@ export default function UserDashboard() {
                     : 'bg-gray-100 text-gray-600';
                 const isPending = conn.status === 'pending';
                 const isActing = actingConnectionId === conn.id;
+                const messageLabel = conn.status === 'completed' ? 'View History' : 'Send Message';
 
                 return (
                   <motion.div
@@ -311,9 +312,17 @@ export default function UserDashboard() {
                         {conn.status}
                       </span>
                     </div>
-                    {isPending ? (
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <Link
+                        to={buildMessagesRoute({ pairingId: conn.id })}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-bold hover:bg-primary/20 transition-colors"
+                      >
+                        <MessageSquare size={12} />
+                        {messageLabel}
+                      </Link>
+                      {isPending ? (
+                        <>
+                          <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => void handleDenyConnection(conn.id, partnerName)}
@@ -338,14 +347,11 @@ export default function UserDashboard() {
                               <span className="inline-flex items-center gap-1"><Check size={12} /> Accept</span>
                             )}
                           </button>
-                        </div>
-                        <p className="text-[10px] text-on-surface-variant">Accept to open chat</p>
-                      </div>
-                    ) : (
-                      <Link to={buildMessagesRoute({ pairingId: conn.id })} className="p-2 rounded-lg hover:bg-primary/10 transition-colors">
-                        <MessageSquare size={16} className="text-primary" />
-                      </Link>
-                    )}
+                          </div>
+                          <p className="text-[10px] text-on-surface-variant">Chat is available now while this request is pending.</p>
+                        </>
+                      ) : null}
+                    </div>
                   </motion.div>
                 );
               })}

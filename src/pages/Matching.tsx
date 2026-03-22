@@ -1,18 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles, Star, Heart, MessageSquare, Loader2, Search,
-  GraduationCap, BookOpen, FlaskConical, UserCheck, X, Send, CalendarPlus, Check
+  GraduationCap, BookOpen, FlaskConical, UserCheck, X, Check
 } from 'lucide-react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import { useSupabase } from '../hooks/useSupabase';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { usePairings } from '../hooks/usePairings';
-import { useMessages } from '../hooks/useMessages';
-import { useMeetings } from '../hooks/useMeetings';
 import { buildMessagesRoute } from '../constants/routes';
 import { calculateMatches, MatchCandidate } from '../services/matchingService';
 
@@ -22,30 +20,12 @@ export default function Matching() {
   const supabase = useSupabase();
   const { profile, role, loading: profileLoading } = useUserProfile();
   const { pairings, loading: pairingsLoading, createPairing, updatePairingStatus, deletePairing } = usePairings();
-  const {
-    conversations,
-    activeConversation,
-    messages: chatMessages,
-    activeConversationId,
-    setActiveConversationId,
-    ensureConversation,
-    sendMessage: sendChatMessage,
-    loadingMessages,
-  } = useMessages();
-  const { createMeeting } = useMeetings();
 
   const [matches, setMatches] = useState<MatchCandidate[]>([]);
   const [filteredMatches, setFilteredMatches] = useState<MatchCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [connectingId, setConnectingId] = useState<string | null>(null);
-  const [chatTarget, setChatTarget] = useState<MatchCandidate | null>(null);
-  const [chatPairingId, setChatPairingId] = useState<string | null>(null);
-  const [chatInput, setChatInput] = useState('');
-  const chatEndRef = useRef<HTMLDivElement>(null);
-  const [showSchedule, setShowSchedule] = useState(false);
-  const [meetingForm, setMeetingForm] = useState({ title: '', date: '', time: '', link: '' });
-  const [scheduling, setScheduling] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'accept' | 'deny' | null>(null);
 
@@ -93,10 +73,6 @@ export default function Matching() {
     );
   }, [matches, searchQuery]);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
   const relevantPairings = useMemo(() => {
     if (!profile || !role) {
       return [];
@@ -121,23 +97,6 @@ export default function Matching() {
     return next;
   }, [relevantPairings, role]);
 
-  const activeChatConversation = useMemo(() => {
-    if (!chatPairingId) {
-      return null;
-    }
-
-    return conversations.find((conversation) => conversation.pairing_id === chatPairingId) ?? null;
-  }, [chatPairingId, conversations]);
-
-  const isArchivedChat = activeChatConversation?.pairing_status === 'completed';
-
-  const closeChat = () => {
-    setChatTarget(null);
-    setChatPairingId(null);
-    setShowSchedule(false);
-    setChatInput('');
-  };
-
   const handleConnect = async (match: MatchCandidate) => {
     if (!profile || !role) {
       return;
@@ -161,7 +120,7 @@ export default function Matching() {
     const matchId = match.id as string;
     const pairing = pairingsByMatchId.get(matchId);
 
-    if (!pairing || pairing.status === 'pending') {
+    if (!pairing) {
       return;
     }
 
@@ -201,66 +160,6 @@ export default function Matching() {
       setPendingActionId(null);
       setPendingAction(null);
     }
-  };
-
-  const handleSendChat = async () => {
-    if (!chatInput.trim() || isArchivedChat) {
-      return;
-    }
-
-    await sendChatMessage(chatInput.trim());
-    setChatInput('');
-  };
-
-  const handleScheduleMeeting = async (event: React.FormEvent) => {
-    event.preventDefault();
-
-    if (!meetingForm.title || !meetingForm.date || !meetingForm.time || !profile || !role || !activeChatConversation) {
-      return;
-    }
-
-    const mentorId =
-      role === 'mentor'
-        ? profile.id
-        : activeChatConversation.counterpart_role === 'mentor'
-          ? activeChatConversation.counterpart_profile_id
-          : null;
-    const menteeId =
-      role === 'mentee'
-        ? profile.id
-        : activeChatConversation.counterpart_role === 'mentee'
-          ? activeChatConversation.counterpart_profile_id
-          : null;
-
-    if (!mentorId || !menteeId) {
-      console.error('Could not resolve meeting participants from the active conversation.');
-      return;
-    }
-
-    setScheduling(true);
-    const scheduledAt = new Date(`${meetingForm.date}T${meetingForm.time}`);
-
-    const meeting = await createMeeting({
-      pairing_id: activeChatConversation.pairing_id,
-      mentor_id: mentorId,
-      mentee_id: menteeId,
-      title: meetingForm.title,
-      meeting_link: meetingForm.link || null,
-      scheduled_at: scheduledAt.toISOString(),
-      duration_minutes: 30,
-      notes: null,
-    });
-
-    if (meeting) {
-      const dateLabel = scheduledAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-      const timeLabel = scheduledAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      const meetingMessage = `Meeting scheduled: ${meetingForm.title} on ${dateLabel} at ${timeLabel}${meetingForm.link ? ` - ${meetingForm.link}` : ''}`;
-      await sendChatMessage(meetingMessage);
-    }
-
-    setMeetingForm({ title: '', date: '', time: '', link: '' });
-    setShowSchedule(false);
-    setScheduling(false);
   };
 
   if (profileLoading || pairingsLoading || loading) {
@@ -411,34 +310,45 @@ export default function Matching() {
                   <div className="flex gap-2 pt-2 border-t border-outline-variant/10">
                     {isConnected ? (
                       isPending && pairing ? (
-                        <>
+                        <div className="flex-1 space-y-2">
                           <button
                             type="button"
-                            onClick={() => void handleDenyPairing(pairing.id, match.name || 'this user')}
-                            disabled={isProcessingPendingAction}
-                            className="flex-1 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => void openChat(match)}
+                            className="w-full py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-100 transition-colors"
                           >
-                            {isProcessingPendingAction && pendingAction === 'deny' ? (
-                              <><Loader2 size={14} className="animate-spin" /> Denying...</>
-                            ) : (
-                              <><X size={14} /> Deny</>
-                            )}
+                            <MessageSquare size={14} />
+                            Send Message
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleAcceptPairing(pairing.id)}
-                            disabled={isProcessingPendingAction}
-                            className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-90 transition-all disabled:opacity-50"
-                          >
-                            {isProcessingPendingAction && pendingAction === 'accept' ? (
-                              <><Loader2 size={14} className="animate-spin" /> Accepting...</>
-                            ) : (
-                              <><Check size={14} /> Accept</>
-                            )}
-                          </button>
-                        </>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleDenyPairing(pairing.id, match.name || 'this user')}
+                              disabled={isProcessingPendingAction}
+                              className="flex-1 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isProcessingPendingAction && pendingAction === 'deny' ? (
+                                <><Loader2 size={14} className="animate-spin" /> Denying...</>
+                              ) : (
+                                <><X size={14} /> Deny</>
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleAcceptPairing(pairing.id)}
+                              disabled={isProcessingPendingAction}
+                              className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-90 transition-all disabled:opacity-50"
+                            >
+                              {isProcessingPendingAction && pendingAction === 'accept' ? (
+                                <><Loader2 size={14} className="animate-spin" /> Accepting...</>
+                              ) : (
+                                <><Check size={14} /> Accept</>
+                              )}
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <button
+                          type="button"
                           onClick={() => openChat(match)}
                           className="flex-1 py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -466,176 +376,6 @@ export default function Matching() {
           })}
         </div>
       )}
-
-      <AnimatePresence>
-        {chatTarget && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex justify-end"
-            onClick={closeChat}
-          >
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              onClick={(event) => event.stopPropagation()}
-              className="w-full max-w-md bg-white h-full flex flex-col shadow-2xl"
-            >
-              <div className="px-5 py-4 border-b border-outline-variant/10 flex items-center gap-3 bg-surface-container-lowest">
-                <img
-                  src={activeChatConversation?.counterpart_avatar_url || chatTarget.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chatTarget.name || 'User')}&background=002045&color=fff`}
-                  alt=""
-                  className="w-10 h-10 rounded-xl object-cover"
-                />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-sm text-primary truncate">
-                    {activeChatConversation?.counterpart_display_name || chatTarget.name}
-                  </h3>
-                  <p className="text-[10px] text-on-surface-variant">
-                    {role === 'mentor' ? (chatTarget as any).major : (chatTarget as any).dept}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowSchedule(true)}
-                  disabled={!activeChatConversation || isArchivedChat}
-                  className="p-2 rounded-xl hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={isArchivedChat ? 'Archived conversations cannot schedule meetings' : 'Schedule a meeting'}
-                >
-                  <CalendarPlus size={16} className="text-primary" />
-                </button>
-                <button
-                  onClick={closeChat}
-                  className="p-2 rounded-xl hover:bg-surface-container-low transition-colors"
-                >
-                  <X size={16} className="text-on-surface-variant" />
-                </button>
-              </div>
-
-              {isArchivedChat && (
-                <div className="px-5 py-3 text-xs font-medium text-amber-800 bg-amber-50 border-b border-amber-200/70">
-                  This chat is archived because the pairing is completed. New messages are disabled.
-                </div>
-              )}
-
-              <div className="flex-1 overflow-y-auto p-5 space-y-3">
-                {loadingMessages ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="animate-spin text-primary" size={20} />
-                  </div>
-                ) : chatMessages.length === 0 ? (
-                  <div className="text-center py-12">
-                    <MessageSquare className="h-10 w-10 text-on-surface-variant/20 mx-auto mb-3" />
-                    <p className="text-sm text-on-surface-variant italic">Start the conversation!</p>
-                    <p className="text-xs text-on-surface-variant/50 mt-1">Say hello to {chatTarget.name}</p>
-                  </div>
-                ) : (
-                  chatMessages.map((message) => {
-                    const isSelf = message.sender_clerk_user_id === user?.id;
-
-                    return (
-                      <div key={message.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm ${
-                          isSelf
-                            ? 'bg-primary text-white rounded-br-md'
-                            : 'bg-surface-container-low text-on-surface rounded-bl-md'
-                        }`}>
-                          {message.content}
-                          <div className={`text-[9px] mt-1 ${isSelf ? 'text-white/50' : 'text-on-surface-variant/50'}`}>
-                            {new Date(message.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              <AnimatePresence>
-                {showSchedule && activeChatConversation && (
-                  <motion.form
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    onSubmit={handleScheduleMeeting}
-                    className="border-t border-outline-variant/10 bg-primary/5 px-4 py-3 space-y-2 overflow-hidden"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-primary">Schedule Meeting</span>
-                      <button type="button" onClick={() => setShowSchedule(false)}>
-                        <X size={14} className="text-on-surface-variant" />
-                      </button>
-                    </div>
-                    <input
-                      required
-                      type="text"
-                      placeholder="Meeting title"
-                      value={meetingForm.title}
-                      onChange={(event) => setMeetingForm({ ...meetingForm, title: event.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-outline-variant/20 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        required
-                        type="date"
-                        value={meetingForm.date}
-                        onChange={(event) => setMeetingForm({ ...meetingForm, date: event.target.value })}
-                        className="px-3 py-2 rounded-lg border border-outline-variant/20 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                      <input
-                        required
-                        type="time"
-                        value={meetingForm.time}
-                        onChange={(event) => setMeetingForm({ ...meetingForm, time: event.target.value })}
-                        className="px-3 py-2 rounded-lg border border-outline-variant/20 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Google Meet / Teams link"
-                      value={meetingForm.link}
-                      onChange={(event) => setMeetingForm({ ...meetingForm, link: event.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-outline-variant/20 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                    <button
-                      type="submit"
-                      disabled={scheduling}
-                      className="w-full py-2 bg-primary text-white rounded-lg text-xs font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-1"
-                    >
-                      {scheduling ? <Loader2 size={12} className="animate-spin" /> : <CalendarPlus size={12} />}
-                      {scheduling ? 'Scheduling...' : 'Schedule'}
-                    </button>
-                  </motion.form>
-                )}
-              </AnimatePresence>
-
-              <div className="px-4 py-3 border-t border-outline-variant/10 bg-surface-container-lowest">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={chatInput}
-                    onChange={(event) => setChatInput(event.target.value)}
-                    onKeyDown={(event) => event.key === 'Enter' && void handleSendChat()}
-                    placeholder={isArchivedChat ? 'Archived conversation' : 'Type a message...'}
-                    disabled={isArchivedChat || !activeConversationId}
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-surface-container-low text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 border border-outline-variant/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <button
-                    onClick={() => void handleSendChat()}
-                    disabled={!chatInput.trim() || isArchivedChat || !activeConversationId}
-                    className="p-2.5 bg-primary text-white rounded-xl hover:opacity-90 transition-all disabled:opacity-30"
-                  >
-                    <Send size={16} />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </PageTransition>
   );
 }

@@ -12,7 +12,7 @@ export default function Header() {
     }`;
 
   return (
-    <header className="sticky top-0 w-full flex justify-between items-center px-8 h-16 bg-white/80 backdrop-blur-xl z-40 shadow-[0_20px_40px_rgba(0,0,0,0.04)] font-headline antialiased tracking-tight">
+    <header className="sticky top-0 z-40 flex h-[var(--app-header-height)] w-full items-center justify-between border-b border-outline-variant/10 bg-surface-container-lowest/80 px-[var(--app-header-px)] font-headline tracking-tight shadow-[0_20px_40px_rgba(0,0,0,0.04)] backdrop-blur-xl">
       <div className="flex items-center gap-2">
         <span className="text-xl font-bold text-primary">Scholarly Editorial</span>
       </div>

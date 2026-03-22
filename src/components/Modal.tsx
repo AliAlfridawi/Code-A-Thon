@@ -41,7 +41,7 @@ export default function Modal({ isOpen, onClose, title, icon: Icon, children }: 
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             className="fixed inset-0 flex items-center justify-center z-[101] p-4 pointer-events-none"
           >
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg pointer-events-auto max-h-[85vh] flex flex-col">
+            <div className="w-full max-w-lg pointer-events-auto max-h-[85vh] flex flex-col rounded-3xl border border-outline-variant/10 bg-surface-container-lowest shadow-2xl">
               {/* Header */}
               <div className="flex items-center justify-between p-6 pb-4 border-b border-outline-variant/10">
                 <div className="flex items-center gap-3">

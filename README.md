@@ -58,15 +58,27 @@ cp .env.example .env
 ```
 Ensure you have the following populated:
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 ```
 
 ### 3. Database Migration
-In the Supabase SQL Editor, execute the two migration files found in `/supabase/migrations/`:
-1. `001_initial_schema.sql` - Provisions the 8 tables, indexes, realtime publications, and mock seed data.
-2. `002_strict_rls.sql` - Drops public policies and enforces strict Clerk JWT Row Level Security.
+Apply every SQL file in `/supabase/migrations/` in numeric order. The current app expects the full schema and RPC contract through `013_canonical_pairing_messaging.sql`, not just the initial schema.
+
+Minimum required messaging migrations:
+1. `007_rebuild_messaging.sql`
+2. `008_allow_pending_pairing_delete.sql`
+3. `009_fix_pairing_conversation_resolution.sql`
+4. `010_stabilize_pairing_messaging.sql`
+5. `011_fix_pairing_conversation_ambiguity.sql`
+6. `012_repair_pairing_conversation_resolution.sql`
+7. `013_canonical_pairing_messaging.sql`
+
+After applying migrations, run the verification helpers in `/supabase/sql/`:
+1. `verify_messaging_contract.sql` - Checks the expected messaging columns, functions, policies, and indexes.
+2. `audit_pairing_messaging_readiness.sql` - Finds pairings blocked by missing `clerk_user_id` data.
+3. `repair_pairing_conversation_members.sql` - Rebuilds canonical conversation membership after data backfills.
 
 ### 4. Clerk JWT Template Integration
 To allow Clerk to communicate with Supabase:
@@ -74,12 +86,14 @@ To allow Clerk to communicate with Supabase:
 2. Create a new "Supabase" template.
 3. Ensure the **Signing Algorithm** is set to `HS256`.
 4. Enter your exact **Supabase JWT Secret** into the **Signing Key** field.
+5. Keep the template name as `supabase`, because the frontend requests `session.getToken({ template: 'supabase' })`.
+6. Verify that the JWT payload `sub` matches the signed-in Clerk user ID. Messaging RPCs and RLS policies rely on `auth.jwt()->>'sub'`.
 
 ### 5. Start the Development Server
 ```bash
 npm run dev
 ```
-The application will be intensely fast and securely available at `http://localhost:5173`.
+The development script in this repo runs at `http://localhost:3000`.
 
 ---
 
