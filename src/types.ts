@@ -7,6 +7,7 @@ export type PairingRow = Database['public']['Tables']['pairings']['Row'];
 export type ConversationRow = Database['public']['Tables']['conversations']['Row'];
 export type ConversationMemberRow = Database['public']['Tables']['conversation_members']['Row'];
 export type MessageRow = Database['public']['Tables']['messages']['Row'];
+export type MeetingRow = Database['public']['Tables']['meetings']['Row'];
 export type ActivityLogRow = Database['public']['Tables']['activity_log']['Row'];
 export type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
 export type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];

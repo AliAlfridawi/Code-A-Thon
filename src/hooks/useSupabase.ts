@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useSession } from '@clerk/clerk-react';
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from '../types/database.types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -17,7 +18,7 @@ export function useSupabase() {
   const { session } = useSession();
 
   return useMemo(() => {
-    return createClient(supabaseUrl, supabaseAnonKey, {
+    return createClient<Database>(supabaseUrl, supabaseAnonKey, {
       global: {
         fetch: async (url, options?: RequestInit) => {
           // Fetch the Supabase-specific JWT from Clerk

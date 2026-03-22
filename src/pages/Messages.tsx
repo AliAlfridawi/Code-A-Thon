@@ -1,29 +1,28 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Search, Send, Paperclip, MoreVertical, Phone, Video, Loader2, CalendarPlus, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Send, Loader2, CalendarPlus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useUser } from '@clerk/clerk-react';
 import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import { useMessages } from '../hooks/useMessages';
 import { useMeetings } from '../hooks/useMeetings';
 import { useUserProfile } from '../hooks/useUserProfile';
 
-import { useUser } from '@clerk/clerk-react';
-
 export default function Messages() {
   const { user } = useUser();
   const {
     conversations,
+    activeConversation,
     messages,
     activeConversationId,
     setActiveConversationId,
     loadingConversations,
     loadingMessages,
-    onlineUsers,
-    typingUsers,
+    onlineUserIds,
+    typingUserIds,
     sendMessage,
-    sendTypingIndicator
+    sendTypingIndicator,
   } = useMessages();
-  
   const { createMeeting } = useMeetings();
   const { profile, role } = useUserProfile();
 
@@ -34,45 +33,64 @@ export default function Messages() {
   const [schedulingMeeting, setSchedulingMeeting] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const activeConvo = conversations.find((c) => c.id === activeConversationId);
+  const isArchivedConversation = activeConversation?.pairing_status === 'completed';
+  const isCounterpartOnline = activeConversation
+    ? onlineUserIds.has(activeConversation.counterpart_clerk_user_id)
+    : false;
+  const isCounterpartTyping = activeConversation
+    ? typingUserIds.has(activeConversation.counterpart_clerk_user_id)
+    : false;
 
-  const filteredConversations = conversations.filter((c) =>
-    (c.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredConversations = useMemo(
+    () =>
+      conversations.filter((conversation) =>
+        conversation.counterpart_display_name.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [conversations, searchQuery]
   );
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim()) return;
-    
-    // Clear typing indicator timeout
+  const handleSend = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!newMessage.trim() || isArchivedConversation) {
+      return;
+    }
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    
+
     await sendMessage(newMessage);
     setNewMessage('');
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewMessage(e.target.value);
-    
-    if (e.target.value.trim() !== '') {
-      sendTypingIndicator(true);
-      
-      // Debounce the 'stopped typing' event
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    setNewMessage(nextValue);
+
+    if (isArchivedConversation) {
+      return;
+    }
+
+    if (nextValue.trim()) {
+      void sendTypingIndicator(true);
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
       typingTimeoutRef.current = setTimeout(() => {
-        sendTypingIndicator(false);
+        void sendTypingIndicator(false);
       }, 2000);
     } else {
-      sendTypingIndicator(false);
+      void sendTypingIndicator(false);
     }
   };
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -84,7 +102,6 @@ export default function Messages() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-280px)]">
-        {/* Conversation List */}
         <section className="bg-surface-container-lowest rounded-3xl border border-outline-variant/10 flex flex-col overflow-hidden">
           <div className="p-4 border-b border-outline-variant/10">
             <div className="relative">
@@ -93,85 +110,95 @@ export default function Messages() {
                 type="text"
                 placeholder="Search conversations..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className="w-full pl-9 pr-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-2 focus:ring-primary/20 transition-all"
               />
             </div>
           </div>
+
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {loadingConversations ? (
               <div className="flex h-full items-center justify-center">
                 <Loader2 className="animate-spin text-primary" size={24} />
               </div>
-            ) : filteredConversations.map((convo) => {
-              const otherMember = convo.members.find(m => m.member_role !== 'owner') || convo.members[0];
-              const dateObj = convo.lastMessage ? new Date(convo.lastMessage.created_at) : new Date(convo.updated_at);
-              const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              
-              const isOnline = otherMember ? onlineUsers.has(otherMember.member_name) : false;
-              const isTyping = otherMember ? typingUsers.has(otherMember.member_name) : false;
+            ) : filteredConversations.length === 0 ? (
+              <div className="flex h-full items-center justify-center p-6 text-center text-sm text-on-surface-variant">
+                No conversations yet. Connect with a mentor or mentee to start chatting.
+              </div>
+            ) : (
+              filteredConversations.map((conversation) => {
+                const previewTime = new Date(
+                  conversation.last_message_created_at ?? conversation.conversation_updated_at
+                ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isOnline = onlineUserIds.has(conversation.counterpart_clerk_user_id);
+                const isTyping = typingUserIds.has(conversation.counterpart_clerk_user_id);
 
-              return (
-                <motion.button
-                  key={convo.id}
-                  whileHover={{ backgroundColor: 'rgba(0,32,69,0.04)' }}
-                  onClick={() => setActiveConversationId(convo.id)}
-                  className={`w-full flex items-center gap-3 p-4 text-left transition-colors ${
-                    activeConversationId === convo.id ? 'bg-primary/5 border-l-3 border-primary' : ''
-                  }`}
-                >
-                  <div className="relative shrink-0">
-                    <img 
-                      src={otherMember?.member_avatar || 'https://via.placeholder.com/150'} 
-                      alt={convo.title || 'Conversation'} 
-                      className="w-11 h-11 rounded-xl object-cover" 
-                    />
-                    {isOnline && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-primary truncate">{convo.title || otherMember?.member_name}</p>
-                      <span className="text-[10px] text-on-surface-variant whitespace-nowrap ml-2">{timeStr}</span>
+                return (
+                  <motion.button
+                    key={conversation.conversation_id}
+                    whileHover={{ backgroundColor: 'rgba(0,32,69,0.04)' }}
+                    onClick={() => setActiveConversationId(conversation.conversation_id)}
+                    className={`w-full flex items-center gap-3 p-4 text-left transition-colors ${
+                      activeConversationId === conversation.conversation_id ? 'bg-primary/5 border-l-3 border-primary' : ''
+                    }`}
+                  >
+                    <div className="relative shrink-0">
+                      <img
+                        src={conversation.counterpart_avatar_url || 'https://via.placeholder.com/150'}
+                        alt={conversation.counterpart_display_name}
+                        className="w-11 h-11 rounded-xl object-cover"
+                      />
+                      {isOnline && (
+                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white" />
+                      )}
                     </div>
-                    <p className={`text-xs truncate mt-0.5 ${isTyping ? 'text-primary font-medium italic' : 'text-on-surface-variant'}`}>
-                      {isTyping ? 'typing...' : (convo.lastMessage?.content || 'No messages yet')}
-                    </p>
-                  </div>
-                  {convo.unreadCount > 0 && !isTyping && (
-                    <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                      {convo.unreadCount}
-                    </span>
-                  )}
-                </motion.button>
-              );
-            })}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-primary truncate">
+                          {conversation.counterpart_display_name}
+                        </p>
+                        <span className="text-[10px] text-on-surface-variant whitespace-nowrap ml-2">
+                          {previewTime}
+                        </span>
+                      </div>
+                      <p className={`text-xs truncate mt-0.5 ${isTyping ? 'text-primary font-medium italic' : 'text-on-surface-variant'}`}>
+                        {isTyping ? 'typing...' : (conversation.last_message_content || 'No messages yet')}
+                      </p>
+                    </div>
+                    {conversation.unread_count > 0 && !isTyping && (
+                      <span className="w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                        {conversation.unread_count}
+                      </span>
+                    )}
+                  </motion.button>
+                );
+              })
+            )}
           </div>
         </section>
 
-        {/* Chat Area */}
         <section className="lg:col-span-2 bg-surface-container-lowest rounded-3xl border border-outline-variant/10 flex flex-col overflow-hidden">
           <AnimatePresence mode="wait">
-            {activeConvo ? (
+            {activeConversation ? (
               <motion.div
-                key={activeConvo.id}
+                key={activeConversation.conversation_id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="flex flex-col h-full"
               >
-                {/* Chat Header */}
                 <div className="flex items-center justify-between p-5 border-b border-outline-variant/10 shadow-sm z-10 shrink-0">
                   <div className="flex items-center gap-3">
-                    <img 
-                      src={activeConvo.members.find(m => m.member_role !== 'owner')?.member_avatar || 'https://via.placeholder.com/150'} 
-                      alt={activeConvo.title || ''} 
-                      className="w-10 h-10 rounded-xl object-cover" 
+                    <img
+                      src={activeConversation.counterpart_avatar_url || 'https://via.placeholder.com/150'}
+                      alt={activeConversation.counterpart_display_name}
+                      className="w-10 h-10 rounded-xl object-cover"
                     />
                     <div>
-                      <p className="text-sm font-bold text-primary">{activeConvo.title}</p>
+                      <p className="text-sm font-bold text-primary">
+                        {activeConversation.counterpart_display_name}
+                      </p>
                       <p className="text-[10px] text-on-surface-variant flex items-center gap-1.5">
-                        {activeConvo.members.some(m => onlineUsers.has(m.member_name)) ? (
+                        {isCounterpartOnline ? (
                           <><span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Online</>
                         ) : (
                           <><span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Offline</>
@@ -179,62 +206,66 @@ export default function Messages() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
-                      <Phone size={16} className="text-on-surface-variant" />
-                    </button>
-                    <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
-                      <Video size={16} className="text-on-surface-variant" />
-                    </button>
-                    <button
-                      onClick={() => setShowScheduleModal(true)}
-                      className="p-2 rounded-xl hover:bg-primary/10 transition-colors group"
-                      title="Schedule a meeting"
-                    >
-                      <CalendarPlus size={16} className="text-primary group-hover:scale-110 transition-transform" />
-                    </button>
-                    <button className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
-                      <MoreVertical size={16} className="text-on-surface-variant" />
-                    </button>
-                  </div>
+
+                  <button
+                    onClick={() => setShowScheduleModal(true)}
+                    disabled={isArchivedConversation}
+                    className="p-2 rounded-xl hover:bg-primary/10 transition-colors group disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={isArchivedConversation ? 'Archived conversations cannot schedule meetings' : 'Schedule a meeting'}
+                  >
+                    <CalendarPlus size={16} className="text-primary group-hover:scale-110 transition-transform" />
+                  </button>
                 </div>
 
-                {/* Messages */}
+                {isArchivedConversation && (
+                  <div className="px-5 py-3 text-xs font-medium text-amber-800 bg-amber-50 border-b border-amber-200/70">
+                    This conversation is archived because the pairing is completed. You can read history, but sending new messages is disabled.
+                  </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar flex flex-col">
                   {loadingMessages ? (
                     <div className="flex h-full items-center justify-center">
                       <Loader2 className="animate-spin text-primary" size={24} />
                     </div>
-                  ) : messages.map((msg, i) => {
-                    const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const isSelf = msg.sender_type === user?.id; // Identify own message by Clerk ID
-                    
-                    return (
-                      <motion.div
-                        key={msg.id}
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.04, duration: 0.25 }}
-                        className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[70%] p-3.5 rounded-2xl text-sm leading-relaxed ${
-                            isSelf
-                              ? 'bg-primary text-white rounded-br-lg shadow-md shadow-primary/10'
-                              : 'bg-surface-container-low text-on-surface rounded-bl-lg border border-outline-variant/5'
-                          }`}
+                  ) : messages.length === 0 ? (
+                    <div className="flex h-full items-center justify-center text-sm text-on-surface-variant italic">
+                      No messages yet. Start the conversation.
+                    </div>
+                  ) : (
+                    messages.map((message, index) => {
+                      const timeStr = new Date(message.created_at).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                      const isSelf = message.sender_clerk_user_id === user?.id;
+
+                      return (
+                        <motion.div
+                          key={message.id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.04, duration: 0.25 }}
+                          className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}
                         >
-                          <p>{msg.content}</p>
-                          <p className={`text-[10px] mt-1.5 ${isSelf ? 'text-white/60' : 'text-on-surface-variant/60'}`}>
-                            {timeStr}
-                          </p>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                  
-                  {/* Typing Indicator Bubble */}
-                  {activeConvo.members.some(m => typingUsers.has(m.member_name)) && (
+                          <div
+                            className={`max-w-[70%] p-3.5 rounded-2xl text-sm leading-relaxed ${
+                              isSelf
+                                ? 'bg-primary text-white rounded-br-lg shadow-md shadow-primary/10'
+                                : 'bg-surface-container-low text-on-surface rounded-bl-lg border border-outline-variant/5'
+                            }`}
+                          >
+                            <p>{message.content}</p>
+                            <p className={`text-[10px] mt-1.5 ${isSelf ? 'text-white/60' : 'text-on-surface-variant/60'}`}>
+                              {timeStr}
+                            </p>
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  )}
+
+                  {isCounterpartTyping && !isArchivedConversation && (
                     <motion.div
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -252,22 +283,19 @@ export default function Messages() {
                   )}
                 </div>
 
-                {/* Message Input */}
                 <form onSubmit={handleSend} className="p-4 border-t border-outline-variant/10 bg-white shrink-0">
                   <div className="flex items-center gap-3">
-                    <button type="button" className="p-2.5 rounded-xl hover:bg-surface-container-low transition-colors">
-                      <Paperclip size={18} className="text-on-surface-variant" />
-                    </button>
                     <input
                       type="text"
                       value={newMessage}
                       onChange={handleInputChange}
-                      placeholder="Type a message..."
-                      className="flex-1 px-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-2 focus:ring-primary/20 transition-all border border-transparent focus:border-primary/20"
+                      placeholder={isArchivedConversation ? 'Archived conversation' : 'Type a message...'}
+                      disabled={isArchivedConversation}
+                      className="flex-1 px-4 py-2.5 bg-surface-container-low rounded-xl text-sm text-on-surface placeholder:text-on-surface-variant/50 outline-none focus:ring-2 focus:ring-primary/20 transition-all border border-transparent focus:border-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                    <button 
-                      type="submit" 
-                      disabled={!newMessage.trim()}
+                    <button
+                      type="submit"
+                      disabled={!newMessage.trim() || isArchivedConversation}
                       className="p-2.5 rounded-xl bg-primary text-white hover:bg-primary-container transition-colors shadow-md shadow-primary/20 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                     >
                       <Send size={18} />
@@ -295,9 +323,8 @@ export default function Messages() {
         </section>
       </div>
 
-      {/* Schedule Meeting Modal */}
       <AnimatePresence>
-        {showScheduleModal && (
+        {showScheduleModal && activeConversation && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -309,28 +336,51 @@ export default function Messages() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              onClick={e => e.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
               className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-outline-variant/10"
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-headline font-bold text-lg text-primary">Schedule a Meeting</h3>
-                <button onClick={() => setShowScheduleModal(false)} className="p-1.5 rounded-lg hover:bg-surface-container-low transition-colors">
+                <button
+                  onClick={() => setShowScheduleModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-surface-container-low transition-colors"
+                >
                   <X size={18} className="text-on-surface-variant" />
                 </button>
               </div>
 
               <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!meetingForm.title || !meetingForm.date || !meetingForm.time) return;
-                  setSchedulingMeeting(true);
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  if (!meetingForm.title || !meetingForm.date || !meetingForm.time || !profile || !role) {
+                    return;
+                  }
 
+                  const mentorId =
+                    role === 'mentor'
+                      ? profile.id
+                      : activeConversation.counterpart_role === 'mentor'
+                        ? activeConversation.counterpart_profile_id
+                        : null;
+                  const menteeId =
+                    role === 'mentee'
+                      ? profile.id
+                      : activeConversation.counterpart_role === 'mentee'
+                        ? activeConversation.counterpart_profile_id
+                        : null;
+
+                  if (!mentorId || !menteeId) {
+                    console.error('Could not resolve meeting participants from the active conversation.');
+                    return;
+                  }
+
+                  setSchedulingMeeting(true);
                   const scheduledAt = new Date(`${meetingForm.date}T${meetingForm.time}`);
 
-                  await createMeeting({
-                    pairing_id: null,
-                    mentor_id: role === 'mentor' ? profile?.id || null : null,
-                    mentee_id: role === 'mentee' ? profile?.id || null : null,
+                  const createdMeeting = await createMeeting({
+                    pairing_id: activeConversation.pairing_id,
+                    mentor_id: mentorId,
+                    mentee_id: menteeId,
                     title: meetingForm.title,
                     meeting_link: meetingForm.link || null,
                     scheduled_at: scheduledAt.toISOString(),
@@ -338,10 +388,12 @@ export default function Messages() {
                     notes: meetingForm.notes || null,
                   });
 
-                  const dateStr = scheduledAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-                  const timeStr = scheduledAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                  const meetingMsg = `📅 Meeting scheduled: ${meetingForm.title} on ${dateStr} at ${timeStr}${meetingForm.link ? ` — ${meetingForm.link}` : ''}`;
-                  await sendMessage(meetingMsg);
+                  if (createdMeeting) {
+                    const dateStr = scheduledAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                    const timeStr = scheduledAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    const meetingMessage = `Meeting scheduled: ${meetingForm.title} on ${dateStr} at ${timeStr}${meetingForm.link ? ` - ${meetingForm.link}` : ''}`;
+                    await sendMessage(meetingMessage, activeConversation.conversation_id);
+                  }
 
                   setMeetingForm({ title: '', date: '', time: '', link: '', notes: '' });
                   setShowScheduleModal(false);
@@ -356,7 +408,7 @@ export default function Messages() {
                     type="text"
                     placeholder="e.g. Weekly check-in"
                     value={meetingForm.title}
-                    onChange={e => setMeetingForm({ ...meetingForm, title: e.target.value })}
+                    onChange={(event) => setMeetingForm({ ...meetingForm, title: event.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   />
                 </div>
@@ -367,7 +419,7 @@ export default function Messages() {
                       required
                       type="date"
                       value={meetingForm.date}
-                      onChange={e => setMeetingForm({ ...meetingForm, date: e.target.value })}
+                      onChange={(event) => setMeetingForm({ ...meetingForm, date: event.target.value })}
                       className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                     />
                   </div>
@@ -377,18 +429,18 @@ export default function Messages() {
                       required
                       type="time"
                       value={meetingForm.time}
-                      onChange={e => setMeetingForm({ ...meetingForm, time: e.target.value })}
+                      onChange={(event) => setMeetingForm({ ...meetingForm, time: event.target.value })}
                       className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-on-surface-variant mb-1.5">Meeting Link (Google Meet / Teams)</label>
+                  <label className="block text-sm font-medium text-on-surface-variant mb-1.5">Meeting Link</label>
                   <input
                     type="text"
                     placeholder="e.g. meet.google.com/abc-defg-hij"
                     value={meetingForm.link}
-                    onChange={e => setMeetingForm({ ...meetingForm, link: e.target.value })}
+                    onChange={(event) => setMeetingForm({ ...meetingForm, link: event.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   />
                 </div>
@@ -398,7 +450,7 @@ export default function Messages() {
                     rows={2}
                     placeholder="Any agenda items or notes..."
                     value={meetingForm.notes}
-                    onChange={e => setMeetingForm({ ...meetingForm, notes: e.target.value })}
+                    onChange={(event) => setMeetingForm({ ...meetingForm, notes: event.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container-low text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                   />
                 </div>

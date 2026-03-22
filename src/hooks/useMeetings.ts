@@ -2,20 +2,11 @@ import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from './useSupabase';
 import { useUserProfile } from './useUserProfile';
+import type { MeetingRow } from '../types';
 
-export interface Meeting {
-  id: string;
-  pairing_id: string | null;
-  mentor_id: string | null;
-  mentee_id: string | null;
-  title: string;
-  meeting_link: string | null;
-  scheduled_at: string;
-  duration_minutes: number;
-  notes: string | null;
-  created_by: string | null;
-  created_at: string;
-}
+export type Meeting = MeetingRow;
+
+export type MeetingInsert = Omit<MeetingRow, 'id' | 'created_at' | 'created_by'>;
 
 export function useMeetings() {
   const { user } = useUser();
@@ -26,7 +17,11 @@ export function useMeetings() {
 
   useEffect(() => {
     async function fetchMeetings() {
-      if (!profile) return;
+      if (!profile || !role) {
+        setMeetings([]);
+        setLoading(false);
+        return;
+      }
 
       const column = role === 'mentor' ? 'mentor_id' : 'mentee_id';
       const { data, error } = await supabase
@@ -46,7 +41,7 @@ export function useMeetings() {
     fetchMeetings();
   }, [profile, role, supabase]);
 
-  const createMeeting = async (meeting: Omit<Meeting, 'id' | 'created_at' | 'created_by'>) => {
+  const createMeeting = async (meeting: MeetingInsert) => {
     if (!user) return null;
 
     const { data, error } = await supabase
