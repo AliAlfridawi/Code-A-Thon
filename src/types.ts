@@ -11,6 +11,8 @@ export type MeetingRow = Database['public']['Tables']['meetings']['Row'];
 export type ActivityLogRow = Database['public']['Tables']['activity_log']['Row'];
 export type UserSettingsRow = Database['public']['Tables']['user_settings']['Row'];
 export type UserProfileRow = Database['public']['Tables']['user_profiles']['Row'];
+export type MessageType = MessageRow['message_type'];
+export type MeetingStatus = MeetingRow['status'];
 
 /**
  * Standard Mentor interface adapted from DB row

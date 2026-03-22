@@ -13,13 +13,14 @@ import { useUserProfile } from '../hooks/useUserProfile';
 import { useMeetings } from '../hooks/useMeetings';
 import { buildMessagesRoute } from '../constants/routes';
 import { calculateMatches, MatchCandidate } from '../services/matchingService';
+import { formatMeetingDateParts, getMeetingStatusClasses } from '../utils/dateUtils';
 
 export default function UserDashboard() {
   const { user } = useUser();
   const navigate = useNavigate();
   const supabase = useSupabase();
   const { profile, role, loading: profileLoading } = useUserProfile();
-  const { meetings, loading: meetingsLoading } = useMeetings();
+  const { upcomingCalendarMeetings, loading: meetingsLoading } = useMeetings();
 
   const [matches, setMatches] = useState<MatchCandidate[]>([]);
   const [connections, setConnections] = useState<any[]>([]);
@@ -165,9 +166,7 @@ export default function UserDashboard() {
   const greeting = user?.firstName ? `Welcome, ${user.firstName}!` : 'Welcome!';
 
   // Group meetings by date for calendar view
-  const upcomingMeetings = meetings.filter(
-    m => new Date(m.scheduled_at) >= new Date()
-  );
+  const upcomingMeetings = upcomingCalendarMeetings;
 
   return (
     <PageTransition>
@@ -399,10 +398,7 @@ export default function UserDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {upcomingMeetings.map((meeting, i) => {
-              const date = new Date(meeting.scheduled_at);
-              const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-              const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-              const time = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+              const { dayName, monthDay, time } = formatMeetingDateParts(meeting.scheduled_at);
 
               return (
                 <motion.div
@@ -417,9 +413,14 @@ export default function UserDashboard() {
                       <p className="text-[10px] uppercase font-bold tracking-wider">{dayName}</p>
                       <p className="text-lg font-bold leading-tight">{monthDay}</p>
                     </div>
-                    <div className="flex items-center gap-1 text-on-surface-variant">
-                      <Clock size={12} />
-                      <span className="text-xs font-medium">{time}</span>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1 text-on-surface-variant">
+                        <Clock size={12} />
+                        <span className="text-xs font-medium">{time}</span>
+                      </div>
+                      <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${getMeetingStatusClasses(meeting.status)}`}>
+                        {meeting.status}
+                      </span>
                     </div>
                   </div>
                   <h3 className="font-bold text-sm text-primary mb-1">{meeting.title}</h3>

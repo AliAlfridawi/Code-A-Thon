@@ -7,10 +7,13 @@ import {
   getSupabaseAuthUserMessage,
   useSupabase,
 } from './useSupabase';
-import type { MessageRow } from '../types';
+import type { MeetingRow, MessageRow } from '../types';
 import type { Database } from '../types/database.types';
 
 export type ConversationSummary = Database['public']['Functions']['get_my_conversations']['Returns'][number];
+export interface ConversationMessage extends MessageRow {
+  meeting: MeetingRow | null;
+}
 export interface EnsureConversationResult {
   conversationId: string | null;
   error: string | null;
@@ -65,7 +68,7 @@ function getEnsureConversationErrorMessage(errorMessage?: string | null) {
   return 'Could not start this conversation right now. Please try again.';
 }
 
-function upsertMessage(list: MessageRow[], message: MessageRow) {
+function upsertMessage<T extends { id: string; created_at: string }>(list: T[], message: T) {
   if (list.some((entry) => entry.id === message.id)) {
     return list;
   }
@@ -73,9 +76,27 @@ function upsertMessage(list: MessageRow[], message: MessageRow) {
   return [...list, message].sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
+function syncMeetingAcrossMessages(
+  list: ConversationMessage[],
+  meetingId: string,
+  meeting: MeetingRow | null
+) {
+  return list.map((message) =>
+    message.meeting_id === meetingId
+      ? {
+          ...message,
+          meeting,
+        }
+      : message
+  );
+}
+
 function updateConversationWithMessage(
   conversations: ConversationSummary[],
-  message: MessageRow,
+  message: Pick<
+    MessageRow,
+    'conversation_id' | 'sender_clerk_user_id' | 'content' | 'created_at' | 'sender_name'
+  >,
   currentUserId: string,
   activeConversationId: string | null
 ) {
@@ -111,7 +132,7 @@ export function useMessages() {
   const supabase = useSupabase();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
@@ -134,6 +155,56 @@ export function useMessages() {
       console.error(`[messages:${source}] ${message}`);
     }
   }, []);
+
+  const fetchMeetingMap = useCallback(async (meetingIds: string[]) => {
+    const uniqueMeetingIds = Array.from(new Set(meetingIds.filter(Boolean)));
+    if (uniqueMeetingIds.length === 0) {
+      return new Map<string, MeetingRow>();
+    }
+
+    const { data, error } = await supabase
+      .from('meetings')
+      .select('*')
+      .in('id', uniqueMeetingIds);
+
+    if (error) {
+      setDebugState(
+        'meetings.select',
+        [error.message, error.details, error.hint, error.code].filter(Boolean).join(' | ')
+      );
+      return new Map<string, MeetingRow>();
+    }
+
+    return new Map((data ?? []).map((meeting) => [meeting.id, meeting]));
+  }, [setDebugState, supabase]);
+
+  const hydrateMessages = useCallback(async (messageRows: MessageRow[]) => {
+    const meetingMap = await fetchMeetingMap(
+      messageRows
+        .map((message) => message.meeting_id)
+        .filter((meetingId): meetingId is string => Boolean(meetingId))
+    );
+
+    return messageRows.map((message) => ({
+      ...message,
+      meeting: message.meeting_id ? meetingMap.get(message.meeting_id) ?? null : null,
+    }));
+  }, [fetchMeetingMap]);
+
+  const hydrateMessage = useCallback(async (message: MessageRow): Promise<ConversationMessage> => {
+    if (!message.meeting_id) {
+      return {
+        ...message,
+        meeting: null,
+      };
+    }
+
+    const meetingMap = await fetchMeetingMap([message.meeting_id]);
+    return {
+      ...message,
+      meeting: meetingMap.get(message.meeting_id) ?? null,
+    };
+  }, [fetchMeetingMap]);
 
   const ensureSupabaseMessagingAuth = useCallback(async (source: string) => {
     if (!user) {
@@ -267,10 +338,25 @@ export function useMessages() {
       return;
     }
 
-    setMessages(data ?? []);
+    const hydratedMessages = await hydrateMessages(data ?? []);
+
+    if (requestId !== messageRequestIdRef.current) {
+      return;
+    }
+
+    setMessages(hydratedMessages);
     setLoadingMessages(false);
     await markConversationRead(conversationId);
-  }, [markConversationRead, setDebugState, supabase]);
+  }, [hydrateMessages, markConversationRead, setDebugState, supabase]);
+
+  const refreshMessages = useCallback(async (conversationId = activeConversationId) => {
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
+
+    await fetchMessages(conversationId);
+  }, [activeConversationId, fetchMessages]);
 
   const sendTypingIndicator = useCallback(async (isTyping: boolean) => {
     if (!activeChannel || !user) {
@@ -316,17 +402,22 @@ export function useMessages() {
       return null;
     }
 
+    const hydratedMessage = await hydrateMessage(data);
+
     setMessages((current) => {
       if (conversationId !== activeConversationId) {
         return current;
       }
 
-      return upsertMessage(current, data);
+      const nextMessages = upsertMessage(current, hydratedMessage);
+      return hydratedMessage.meeting_id
+        ? syncMeetingAcrossMessages(nextMessages, hydratedMessage.meeting_id, hydratedMessage.meeting)
+        : nextMessages;
     });
 
     setConversations((current) => updateConversationWithMessage(current, data, user.id, activeConversationId));
     return data;
-  }, [activeConversationId, sendTypingIndicator, setDebugState, supabase, user]);
+  }, [activeConversationId, hydrateMessage, sendTypingIndicator, setDebugState, supabase, user]);
 
   const ensureConversation = useCallback(async (pairingId: string): Promise<EnsureConversationResult> => {
     if (!user) {
@@ -446,11 +537,20 @@ export function useMessages() {
           });
 
           if (nextMessage.conversation_id === activeConversationId) {
-            setMessages((current) => upsertMessage(current, nextMessage));
+            void (async () => {
+              const hydratedMessage = await hydrateMessage(nextMessage);
 
-            if (nextMessage.sender_clerk_user_id !== user.id) {
-              void markConversationRead(nextMessage.conversation_id);
-            }
+              setMessages((current) => {
+                const nextMessages = upsertMessage(current, hydratedMessage);
+                return hydratedMessage.meeting_id
+                  ? syncMeetingAcrossMessages(nextMessages, hydratedMessage.meeting_id, hydratedMessage.meeting)
+                  : nextMessages;
+              });
+
+              if (nextMessage.sender_clerk_user_id !== user.id) {
+                await markConversationRead(nextMessage.conversation_id);
+              }
+            })();
           }
         }
       )
@@ -459,7 +559,7 @@ export function useMessages() {
     return () => {
       void supabase.removeChannel(inboxChannel);
     };
-  }, [activeConversationId, markConversationRead, refreshConversations, supabase, user]);
+  }, [activeConversationId, hydrateMessage, markConversationRead, refreshConversations, supabase, user]);
 
   useEffect(() => {
     if (!activeConversationId || !user) {
@@ -539,6 +639,7 @@ export function useMessages() {
     sendMessage,
     sendTypingIndicator,
     refreshConversations,
+    refreshMessages,
     ensureConversation,
     markConversationRead,
     conversationLoadError,

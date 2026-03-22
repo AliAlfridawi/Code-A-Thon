@@ -64,7 +64,7 @@ VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
 ```
 
 ### 3. Database Migration
-Apply every SQL file in `/supabase/migrations/` in numeric order. The current app expects the full schema and RPC contract through `013_canonical_pairing_messaging.sql`, not just the initial schema.
+Apply every SQL file in `/supabase/migrations/` in numeric order. The current app expects the full schema and RPC contract through `017_normalize_meeting_rpc_contract.sql`, not just the initial schema.
 
 Minimum required messaging migrations:
 1. `007_rebuild_messaging.sql`
@@ -74,9 +74,11 @@ Minimum required messaging migrations:
 5. `011_fix_pairing_conversation_ambiguity.sql`
 6. `012_repair_pairing_conversation_resolution.sql`
 7. `013_canonical_pairing_messaging.sql`
+8. `016_meeting_request_approval_flow.sql`
+9. `017_normalize_meeting_rpc_contract.sql`
 
 After applying migrations, run the verification helpers in `/supabase/sql/`:
-1. `verify_messaging_contract.sql` - Checks the expected messaging columns, functions, policies, and indexes.
+1. `verify_messaging_contract.sql` - Checks the expected messaging and meeting columns, functions, policies, and indexes.
 2. `audit_pairing_messaging_readiness.sql` - Finds pairings blocked by missing `clerk_user_id` data.
 3. `repair_pairing_conversation_members.sql` - Rebuilds canonical conversation membership after data backfills.
 

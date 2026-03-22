@@ -112,6 +112,8 @@ export interface Database {
           sender_clerk_user_id: string
           sender_name: string
           content: string
+          message_type: 'text' | 'meeting_request' | 'meeting_response'
+          meeting_id: string | null
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['messages']['Row'], 'id' | 'created_at'> & {
@@ -132,6 +134,9 @@ export interface Database {
           duration_minutes: number
           notes: string | null
           created_by: string | null
+          status: 'pending' | 'accepted' | 'rejected'
+          responded_at: string | null
+          responded_by: string | null
           created_at: string
         }
         Insert: Omit<Database['public']['Tables']['meetings']['Row'], 'id' | 'created_at'> & {
@@ -226,6 +231,33 @@ export interface Database {
         }
         Returns: {
           read_at: string
+        }[]
+      }
+      request_pairing_meeting: {
+        Args: {
+          pairing_id: string
+          title: string
+          scheduled_at: string
+          duration_minutes?: number
+          meeting_link?: string | null
+          notes?: string | null
+        }
+        Returns: {
+          meeting_id: string
+          conversation_id: string
+          message_id: string
+        }[]
+      }
+      respond_to_meeting_request: {
+        Args: {
+          meeting_id: string
+          decision: string
+        }
+        Returns: {
+          meeting_id: string
+          status: 'accepted' | 'rejected'
+          conversation_id: string
+          message_id: string
         }[]
       }
     }

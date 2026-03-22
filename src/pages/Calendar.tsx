@@ -7,6 +7,13 @@ import PageTransition from '../components/PageTransition';
 import PageHeader from '../components/PageHeader';
 import { useMeetings, Meeting } from '../hooks/useMeetings';
 import { useUserProfile } from '../hooks/useUserProfile';
+import {
+  formatMeetingDateKeyLabel,
+  formatMeetingDateParts,
+  getMeetingDateKey,
+  getMeetingStatusClasses,
+  isMeetingWithinDays,
+} from '../utils/dateUtils';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -20,7 +27,7 @@ function getFirstDayOfMonth(year: number, month: number) {
 }
 
 export default function Calendar() {
-  const { meetings, loading } = useMeetings();
+  const { calendarMeetings, upcomingCalendarMeetings, loading } = useMeetings();
   const { role } = useUserProfile();
   const now = new Date();
   const [currentMonth, setCurrentMonth] = useState(now.getMonth());
@@ -40,26 +47,15 @@ export default function Calendar() {
     else setCurrentMonth(m => m + 1);
   };
 
-  // Group meetings by date string
   const meetingsByDate: Record<string, Meeting[]> = {};
-  meetings.forEach(m => {
-    const date = new Date(m.scheduled_at);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  calendarMeetings.forEach((meeting) => {
+    const key = getMeetingDateKey(meeting.scheduled_at);
     if (!meetingsByDate[key]) meetingsByDate[key] = [];
-    meetingsByDate[key].push(m);
+    meetingsByDate[key].push(meeting);
   });
 
-  const selectedKey = selectedDate;
-  const selectedMeetings = selectedKey ? meetingsByDate[selectedKey] || [] : [];
-
-  // Upcoming meetings (next 7 days)
-  const upcoming = meetings
-    .filter(m => {
-      const d = new Date(m.scheduled_at);
-      const diff = d.getTime() - now.getTime();
-      return diff > 0 && diff < 7 * 24 * 60 * 60 * 1000;
-    })
-    .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+  const selectedMeetings = selectedDate ? meetingsByDate[selectedDate] || [] : [];
+  const upcoming = upcomingCalendarMeetings.filter((meeting) => isMeetingWithinDays(meeting.scheduled_at, 7, now));
 
   if (loading) {
     return (
@@ -75,13 +71,11 @@ export default function Calendar() {
     <PageTransition>
       <PageHeader
         title="Calendar"
-        description={`Your scheduled meetings with ${role === 'mentor' ? 'mentees' : 'mentors'}.`}
+        description={`Your pending and confirmed meetings with ${role === 'mentor' ? 'mentees' : 'mentors'}.`}
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* Calendar Grid */}
         <div className="xl:col-span-2 bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10">
-          {/* Month Navigation */}
           <div className="flex items-center justify-between mb-6">
             <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-surface-container-low transition-colors">
               <ChevronLeft size={20} className="text-primary" />
@@ -94,7 +88,6 @@ export default function Calendar() {
             </button>
           </div>
 
-          {/* Day Headers */}
           <div className="grid grid-cols-7 gap-1 mb-2">
             {DAYS.map(day => (
               <div key={day} className="text-center text-[10px] font-bold text-on-surface-variant uppercase tracking-wider py-2">
@@ -103,18 +96,15 @@ export default function Calendar() {
             ))}
           </div>
 
-          {/* Calendar Days */}
           <div className="grid grid-cols-7 gap-1">
-            {/* Empty cells for days before the 1st */}
             {Array.from({ length: firstDay }).map((_, i) => (
               <div key={`empty-${i}`} className="aspect-square" />
             ))}
 
-            {/* Days of the month */}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
               const dateKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              const hasMeeting = meetingsByDate[dateKey] && meetingsByDate[dateKey].length > 0;
+              const hasMeeting = Boolean(meetingsByDate[dateKey]?.length);
               const isToday = day === now.getDate() && currentMonth === now.getMonth() && currentYear === now.getFullYear();
               const isSelected = selectedDate === dateKey;
 
@@ -133,40 +123,37 @@ export default function Calendar() {
                   }`}
                 >
                   {day}
-                  {hasMeeting && (
+                  {hasMeeting ? (
                     <div className={`absolute bottom-1.5 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-primary'}`} />
-                  )}
+                  ) : null}
                 </motion.button>
               );
             })}
           </div>
         </div>
 
-        {/* Sidebar: Upcoming / Selected Day */}
         <div className="space-y-6">
-          {/* Selected Day Meetings */}
-          {selectedDate && (
+          {selectedDate ? (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10"
             >
               <h3 className="font-headline font-bold text-sm text-primary mb-4">
-                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                {formatMeetingDateKeyLabel(selectedDate)}
               </h3>
               {selectedMeetings.length === 0 ? (
                 <p className="text-xs text-on-surface-variant italic">No meetings on this day.</p>
               ) : (
                 <div className="space-y-3">
-                  {selectedMeetings.map(m => (
-                    <MeetingCard key={m.id} meeting={m} />
+                  {selectedMeetings.map(meeting => (
+                    <MeetingCard key={meeting.id} meeting={meeting} />
                   ))}
                 </div>
               )}
             </motion.div>
-          )}
+          ) : null}
 
-          {/* Upcoming This Week */}
           <div className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/10">
             <div className="flex items-center gap-2 mb-4">
               <CalendarDays size={16} className="text-primary" />
@@ -179,8 +166,8 @@ export default function Calendar() {
               </div>
             ) : (
               <div className="space-y-3">
-                {upcoming.map(m => (
-                  <MeetingCard key={m.id} meeting={m} />
+                {upcoming.map(meeting => (
+                  <MeetingCard key={meeting.id} meeting={meeting} />
                 ))}
               </div>
             )}
@@ -192,24 +179,27 @@ export default function Calendar() {
 }
 
 const MeetingCard: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
-  const date = new Date(meeting.scheduled_at);
-  const time = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+  const { time, dayName } = formatMeetingDateParts(meeting.scheduled_at);
 
   return (
     <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-4 border border-primary/10">
       <div className="flex items-start justify-between mb-2">
         <h4 className="font-bold text-sm text-primary">{meeting.title}</h4>
-        <div className="flex items-center gap-1 text-on-surface-variant shrink-0 ml-2">
-          <Clock size={10} />
-          <span className="text-[10px] font-medium">{time}</span>
+        <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+          <div className="flex items-center gap-1 text-on-surface-variant">
+            <Clock size={10} />
+            <span className="text-[10px] font-medium">{time}</span>
+          </div>
+          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${getMeetingStatusClasses(meeting.status)}`}>
+            {meeting.status}
+          </span>
         </div>
       </div>
       <p className="text-[10px] text-on-surface-variant mb-2">
-        {dayName} · {meeting.duration_minutes} min
-        {meeting.notes ? ` · ${meeting.notes}` : ''}
+        {dayName} - {meeting.duration_minutes} min
+        {meeting.notes ? ` - ${meeting.notes}` : ''}
       </p>
-      {meeting.meeting_link && (
+      {meeting.meeting_link ? (
         <a
           href={meeting.meeting_link.startsWith('http') ? meeting.meeting_link : `https://${meeting.meeting_link}`}
           target="_blank"
@@ -219,7 +209,7 @@ const MeetingCard: React.FC<{ meeting: Meeting }> = ({ meeting }) => {
           <Video size={10} />
           Join
         </a>
-      )}
+      ) : null}
     </div>
   );
 };
