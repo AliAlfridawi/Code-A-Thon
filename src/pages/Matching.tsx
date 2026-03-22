@@ -322,42 +322,40 @@ export default function Matching() {
                   <div className="flex gap-2 pt-2 border-t border-outline-variant/10">
                     {isConnected ? (
                       isPending && pairing ? (
-                        <div className="flex-1 space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => void openChat(match)}
-                            className="w-full py-2.5 bg-green-50 text-green-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-100 transition-colors"
-                          >
-                            <MessageSquare size={14} />
-                            Send Message
-                          </button>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void handleDenyPairing(pairing.id, match.name || 'this user')}
-                              disabled={isProcessingPendingAction}
-                              className="flex-1 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isProcessingPendingAction && pendingAction === 'deny' ? (
-                                <><Loader2 size={14} className="animate-spin" /> Denying...</>
-                              ) : (
-                                <><X size={14} /> Deny</>
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleAcceptPairing(pairing.id)}
-                              disabled={isProcessingPendingAction}
-                              className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-90 transition-all disabled:opacity-50"
-                            >
-                              {isProcessingPendingAction && pendingAction === 'accept' ? (
-                                <><Loader2 size={14} className="animate-spin" /> Accepting...</>
-                              ) : (
-                                <><Check size={14} /> Accept</>
-                              )}
-                            </button>
+                        role === 'mentor' ? (
+                          <div className="flex-1 space-y-2">
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleDenyPairing(pairing.id, match.name || 'this user')}
+                                disabled={isProcessingPendingAction}
+                                className="flex-1 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isProcessingPendingAction && pendingAction === 'deny' ? (
+                                  <><Loader2 size={14} className="animate-spin" /> Denying...</>
+                                ) : (
+                                  <><X size={14} /> Deny</>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleAcceptPairing(pairing.id)}
+                                disabled={isProcessingPendingAction}
+                                className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-90 transition-all disabled:opacity-50"
+                              >
+                                {isProcessingPendingAction && pendingAction === 'accept' ? (
+                                  <><Loader2 size={14} className="animate-spin" /> Accepting...</>
+                                ) : (
+                                  <><Check size={14} /> Accept</>
+                                )}
+                              </button>
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex-1 py-2.5 bg-amber-50 text-amber-700 font-bold text-xs rounded-xl flex items-center justify-center">
+                            Approval Pending
+                          </div>
+                        )
                       ) : (
                         <button
                           type="button"
@@ -368,18 +366,22 @@ export default function Matching() {
                           {pairing?.status === 'completed' ? 'View History' : 'Send Message'}
                         </button>
                       )
-                    ) : (
+                    ) : role === 'mentee' ? (
                       <button
                         onClick={() => handleConnect(match)}
                         disabled={isConnecting}
                         className="flex-1 py-2.5 bg-primary text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 hover:opacity-90 transition-all disabled:opacity-50 shadow-md shadow-primary/20"
                       >
                         {isConnecting ? (
-                          <><Loader2 size={14} className="animate-spin" /> Connecting...</>
+                          <><Loader2 size={14} className="animate-spin" /> Requesting...</>
                         ) : (
-                          <><Heart size={14} /> Connect</>
+                          <><Heart size={14} /> Request Pairing</>
                         )}
                       </button>
+                    ) : (
+                      <div className="flex-1 py-2.5 bg-surface-container-low text-on-surface-variant font-bold text-xs rounded-xl flex items-center justify-center">
+                        Mentees must initiate
+                      </div>
                     )}
                   </div>
                 </div>

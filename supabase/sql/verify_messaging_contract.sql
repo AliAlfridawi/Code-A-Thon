@@ -13,7 +13,7 @@ WHERE table_schema = 'public'
     (table_name = 'conversations' AND column_name IN ('id', 'pairing_id', 'updated_at'))
     OR (table_name = 'conversation_members' AND column_name IN ('conversation_id', 'clerk_user_id', 'profile_id', 'profile_role', 'last_read_at'))
     OR (table_name = 'messages' AND column_name IN ('conversation_id', 'sender_clerk_user_id', 'sender_name', 'content', 'message_type', 'meeting_id', 'created_at'))
-    OR (table_name = 'meetings' AND column_name IN ('pairing_id', 'mentor_id', 'mentee_id', 'status', 'responded_at', 'responded_by', 'scheduled_at'))
+    OR (table_name = 'meetings' AND column_name IN ('pairing_id', 'mentor_id', 'mentee_id', 'created_by', 'status', 'responded_at', 'responded_by', 'scheduled_at'))
   )
 ORDER BY table_name, column_name;
 

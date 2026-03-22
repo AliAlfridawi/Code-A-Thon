@@ -135,17 +135,30 @@ BEGIN
 END;
 $$;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_namespace n ON n.oid = t.typnamespace
+    WHERE n.nspname = 'public'
+      AND t.typname = 'meeting_request_response_result'
+  ) THEN
+    CREATE TYPE public.meeting_request_response_result AS (
+      meeting_id UUID,
+      status TEXT,
+      conversation_id UUID,
+      message_id UUID
+    );
+  END IF;
+END $$;
+
 DROP FUNCTION IF EXISTS respond_to_meeting_request(UUID, TEXT);
 CREATE OR REPLACE FUNCTION respond_to_meeting_request(
   meeting_id UUID,
   decision TEXT
 )
-RETURNS TABLE (
-  meeting_id UUID,
-  status TEXT,
-  conversation_id UUID,
-  message_id UUID
-)
+RETURNS SETOF public.meeting_request_response_result
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
@@ -263,7 +276,11 @@ BEGIN
   INTO v_message;
 
   RETURN QUERY
-  SELECT v_meeting.id, v_meeting.status, v_conversation_id, v_message.id;
+  SELECT
+    v_meeting.id,
+    v_meeting.status,
+    v_conversation_id,
+    v_message.id;
 END;
 $$;
 

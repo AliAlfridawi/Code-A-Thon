@@ -78,6 +78,10 @@ function getMeetingActionErrorMessage(errorMessage?: string | null) {
     return 'That meeting response was not valid.';
   }
 
+  if (import.meta.env.DEV) {
+    return `Developer Error: ${errorMessage}`;
+  }
+
   return 'We could not update that meeting right now. Please try again.';
 }
 

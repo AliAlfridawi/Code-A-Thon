@@ -30,12 +30,19 @@ function getCachedStateForUser(userId?: string | null) {
   };
 }
 
+const listeners = new Set<() => void>();
+
+function notifyListeners() {
+  listeners.forEach((listener) => listener());
+}
+
 export function clearOnboardingStatusCache() {
   cachedState = {
     userId: null,
     isOnboarded: false,
     role: null,
   };
+  notifyListeners();
 }
 
 export function markOnboardingComplete(userId: string, role: OnboardingRole) {
@@ -44,6 +51,7 @@ export function markOnboardingComplete(userId: string, role: OnboardingRole) {
     isOnboarded: true,
     role,
   };
+  notifyListeners();
 }
 
 export function useOnboardingStatus() {
@@ -55,6 +63,19 @@ export function useOnboardingStatus() {
   const [isLoading, setIsLoading] = useState(userId ? !cachedForUser.isOnboarded : true);
   const [isOnboarded, setIsOnboarded] = useState(cachedForUser.isOnboarded);
   const [role, setRole] = useState<OnboardingRole | null>(cachedForUser.role);
+
+  useEffect(() => {
+    const handleStateChange = () => {
+      const state = getCachedStateForUser(userId);
+      setIsOnboarded(state.isOnboarded);
+      setRole(state.role);
+    };
+
+    listeners.add(handleStateChange);
+    return () => {
+      listeners.delete(handleStateChange);
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!isUserLoaded) {

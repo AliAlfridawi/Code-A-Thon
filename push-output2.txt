@@ -1,0 +1,45 @@
+Initialising login role...
+Connecting to remote database...
+Do you want to push these migrations to the remote database?
+ • 001_initial_schema.sql
+ • 002_strict_rls.sql
+ • 003_user_profiles.sql
+ • 004_meetings.sql
+ • 005_cleanup.sql
+ • 006_fix_sender_type_constraint.sql
+ • 007_rebuild_messaging.sql
+ • 008_allow_pending_pairing_delete.sql
+ • 009_fix_pairing_conversation_resolution.sql
+ • 010_stabilize_pairing_messaging.sql
+ • 011_fix_pairing_conversation_ambiguity.sql
+ • 012_repair_pairing_conversation_resolution.sql
+ • 013_canonical_pairing_messaging.sql
+ • 014_fix_ensure_pairing_conversation_parameter.sql
+ • 015_fix_ensure_pairing_conversation_output_ambiguity.sql
+ • 016_meeting_request_approval_flow.sql
+ • 017_normalize_meeting_rpc_contract.sql
+ • 018_fix_meetings_rls_recursion.sql
+
+ [Y/n] y
+Applying migration 001_initial_schema.sql...
+NOTICE (42P07): relation "mentors" already exists, skipping
+NOTICE (42P07): relation "mentees" already exists, skipping
+NOTICE (42P07): relation "pairings" already exists, skipping
+NOTICE (42P07): relation "conversations" already exists, skipping
+NOTICE (42P07): relation "conversation_members" already exists, skipping
+NOTICE (42P07): relation "messages" already exists, skipping
+NOTICE (42P07): relation "activity_log" already exists, skipping
+NOTICE (42P07): relation "user_settings" already exists, skipping
+NOTICE (42P07): relation "idx_pairings_mentor" already exists, skipping
+NOTICE (42P07): relation "idx_pairings_mentee" already exists, skipping
+NOTICE (42P07): relation "idx_activity_log_created" already exists, skipping
+Applying migration 002_strict_rls.sql...
+ERROR: policy "Public read mentors" for table "mentors" already exists (SQLSTATE 42710)
+At statement: 20                                                                       
+-- ================= NEW STRICT POLICIES =================                             
+                                                                                       
+-- 1. Mentors                                                                          
+-- Anyone can view mentor profiles                                                     
+CREATE POLICY "Public read mentors" ON mentors                                         
+  FOR SELECT USING (true)                                                              
+Try rerunning the command with --debug to troubleshoot the error.
