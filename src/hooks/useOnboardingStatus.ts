@@ -1,45 +1,84 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from './useSupabase';
-import type { UserProfileRow } from '../types';
 
-// Module-level cache: once onboarding is confirmed complete, remember it
-// so that re-mounts of this hook don't briefly flash isOnboarded=false
-// and cause the OnboardingGuard to redirect back to /onboarding.
-let cachedOnboarded = false;
-let cachedRole: 'mentor' | 'mentee' | null = null;
+type OnboardingRole = 'mentor' | 'mentee';
 
-/** Call this right after the profile upsert succeeds to warm the cache
- *  before navigating away from onboarding. */
-export function markOnboardingComplete(role: 'mentor' | 'mentee') {
-  cachedOnboarded = true;
-  cachedRole = role;
+type CachedOnboardingState = {
+  userId: string | null;
+  isOnboarded: boolean;
+  role: OnboardingRole | null;
+};
+
+let cachedState: CachedOnboardingState = {
+  userId: null,
+  isOnboarded: false,
+  role: null,
+};
+
+function getCachedStateForUser(userId?: string | null) {
+  if (!userId || cachedState.userId !== userId) {
+    return {
+      isOnboarded: false,
+      role: null as OnboardingRole | null,
+    };
+  }
+
+  return {
+    isOnboarded: cachedState.isOnboarded,
+    role: cachedState.role,
+  };
+}
+
+export function clearOnboardingStatusCache() {
+  cachedState = {
+    userId: null,
+    isOnboarded: false,
+    role: null,
+  };
+}
+
+export function markOnboardingComplete(userId: string, role: OnboardingRole) {
+  cachedState = {
+    userId,
+    isOnboarded: true,
+    role,
+  };
 }
 
 export function useOnboardingStatus() {
   const { user, isLoaded: isUserLoaded } = useUser();
   const supabase = useSupabase();
-  // If we already know they're onboarded, start with that so the guard
-  // never sees the false→true flicker.
-  const [isLoading, setIsLoading] = useState(!cachedOnboarded);
-  const [isOnboarded, setIsOnboarded] = useState(cachedOnboarded);
-  const [role, setRole] = useState<'mentor' | 'mentee' | null>(cachedRole);
+  const userId = user?.id ?? null;
+  const cachedForUser = getCachedStateForUser(userId);
+
+  const [isLoading, setIsLoading] = useState(userId ? !cachedForUser.isOnboarded : true);
+  const [isOnboarded, setIsOnboarded] = useState(cachedForUser.isOnboarded);
+  const [role, setRole] = useState<OnboardingRole | null>(cachedForUser.role);
 
   useEffect(() => {
-    // If we already confirmed onboarding, skip the DB query entirely
-    if (cachedOnboarded) {
+    if (!isUserLoaded) {
+      return;
+    }
+
+    if (!user) {
+      setIsOnboarded(false);
+      setRole(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const nextCachedState = getCachedStateForUser(user.id);
+
+    if (nextCachedState.isOnboarded) {
       setIsOnboarded(true);
-      setRole(cachedRole);
+      setRole(nextCachedState.role);
       setIsLoading(false);
       return;
     }
 
     async function checkOnboarding() {
-      if (!isUserLoaded) return;
-      if (!user) {
-        setIsLoading(false);
-        return;
-      }
+      setIsLoading(true);
 
       try {
         const { data, error } = await supabase
@@ -50,29 +89,37 @@ export function useOnboardingStatus() {
 
         if (error) {
           if (error.code === 'PGRST116') {
-            // No profile found means not onboarded
             setIsOnboarded(false);
             setRole(null);
           } else {
             console.error('Error fetching onboarding status:', error);
-            // On transient errors (406, 401, etc), don't redirect to onboarding
-            // Keep previous state to avoid redirect loops
           }
-        } else if (data) {
+          return;
+        }
+
+        if (data) {
           const onboarded = data.onboarding_complete ?? false;
-          const userRole = data.role as 'mentor' | 'mentee';
+          const userRole = data.role as OnboardingRole;
+
           setIsOnboarded(onboarded);
           setRole(userRole);
-          // Persist to module-level cache so future mounts are instant
-          if (onboarded) {
-            cachedOnboarded = true;
-            cachedRole = userRole;
-          }
-        } else {
-          // maybeSingle returned null (no rows) — not onboarded
-          setIsOnboarded(false);
-          setRole(null);
+
+          cachedState = {
+            userId: user.id,
+            isOnboarded: onboarded,
+            role: userRole,
+          };
+
+          return;
         }
+
+        setIsOnboarded(false);
+        setRole(null);
+        cachedState = {
+          userId: user.id,
+          isOnboarded: false,
+          role: null,
+        };
       } catch (err) {
         console.error('Unexpected error checking onboarding status:', err);
       } finally {
@@ -80,13 +127,11 @@ export function useOnboardingStatus() {
       }
     }
 
-    checkOnboarding();
-  }, [user, isUserLoaded, supabase]);
+    void checkOnboarding();
+  }, [isUserLoaded, supabase, user]);
 
-  // Allow callers (like signout) to reset the cache
   const resetCache = useCallback(() => {
-    cachedOnboarded = false;
-    cachedRole = null;
+    clearOnboardingStatusCache();
   }, []);
 
   return { isLoading: isLoading || !isUserLoaded, isOnboarded, role, resetCache };

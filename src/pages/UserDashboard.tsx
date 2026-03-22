@@ -31,8 +31,13 @@ export default function UserDashboard() {
   // Fetch potential matches
   useEffect(() => {
     async function fetchMatches() {
+      if (profileLoading) {
+        return;
+      }
+
       if (!profile || !role || !user) return;
 
+      setLoadingMatches(true);
       const oppositeTable = role === 'mentor' ? 'mentees' : 'mentors';
       const { data, error } = await supabase.from(oppositeTable).select('*');
 
@@ -48,8 +53,14 @@ export default function UserDashboard() {
       setLoadingMatches(false);
     }
 
-    fetchMatches();
-  }, [profile, role, supabase, user]);
+    if (!profileLoading && (!profile || !role || !user)) {
+      setMatches([]);
+      setLoadingMatches(false);
+      return;
+    }
+
+    void fetchMatches();
+  }, [profile, profileLoading, role, supabase, user]);
 
   const fetchConnections = useCallback(async () => {
     if (!profile || !role) {

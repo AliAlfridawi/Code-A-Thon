@@ -1,18 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RoleSelection } from './onboarding/RoleSelection';
 import { ProfileQuiz } from './onboarding/ProfileQuiz';
 import { MatchResults } from './onboarding/MatchResults';
+import { useOnboardingStatus } from '../hooks/useOnboardingStatus';
 
 export type OnboardingStep = 1 | 2 | 3;
 export type UserRole = 'mentor' | 'mentee';
 
 export default function Onboarding() {
+  const { role: persistedRole } = useOnboardingStatus();
   const [step, setStep] = useState<OnboardingStep>(1);
   const [role, setRole] = useState<UserRole | null>(null);
   const [formData, setFormData] = useState<any>(null);
 
   const nextStep = () => setStep((prev) => (prev + 1) as OnboardingStep);
+
+  useEffect(() => {
+    if (!persistedRole || role) {
+      return;
+    }
+
+    setRole(persistedRole);
+    setStep(2);
+  }, [persistedRole, role]);
 
   const renderStep = () => {
     switch (step) {

@@ -23,31 +23,49 @@ interface UserProfile {
 export function useUserProfile() {
   const { user } = useUser();
   const supabase = useSupabase();
-  const { role } = useOnboardingStatus();
+  const { role, isLoading: onboardingLoading } = useOnboardingStatus();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchProfile() {
-      if (!user || !role) return;
+      if (!user) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      if (onboardingLoading) {
+        setLoading(true);
+        return;
+      }
+
+      if (!role) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
 
       const table = role === 'mentor' ? 'mentors' : 'mentees';
       const { data, error } = await supabase
         .from(table)
         .select('*')
         .eq('clerk_user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching user profile:', error);
+        setProfile(null);
       } else {
-        setProfile(data as UserProfile);
+        setProfile((data as UserProfile | null) ?? null);
       }
       setLoading(false);
     }
 
-    fetchProfile();
-  }, [user, role, supabase]);
+    void fetchProfile();
+  }, [onboardingLoading, role, supabase, user]);
 
   return { profile, role, loading };
 }

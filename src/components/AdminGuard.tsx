@@ -1,7 +1,7 @@
 import React from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { Navigate } from 'react-router-dom';
 import { Loader2, ShieldAlert } from 'lucide-react';
+import { isAdminEmail } from '../constants/routes';
 
 interface AdminGuardProps {
   children: React.ReactNode;
@@ -18,7 +18,7 @@ export function AdminGuard({ children }: AdminGuardProps) {
     );
   }
 
-  const isAdmin = user?.primaryEmailAddress?.emailAddress === 'alfridawiali@gmail.com';
+  const isAdmin = isAdminEmail(user?.primaryEmailAddress?.emailAddress);
 
   if (!isAdmin) {
     return (

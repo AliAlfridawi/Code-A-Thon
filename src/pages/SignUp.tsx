@@ -1,6 +1,6 @@
 import { SignUp } from '@clerk/clerk-react';
 import { motion } from 'motion/react';
-import { SIGN_IN_ROUTE, SIGN_UP_ROUTE } from '../constants/routes';
+import { ONBOARDING_ROUTE, SIGN_IN_ROUTE, SIGN_UP_ROUTE } from '../constants/routes';
 
 export default function SignUpPage() {
   return (
@@ -23,6 +23,8 @@ export default function SignUpPage() {
           routing="path"
           path={SIGN_UP_ROUTE}
           signInUrl={SIGN_IN_ROUTE}
+          forceRedirectUrl={ONBOARDING_ROUTE}
+          fallbackRedirectUrl={ONBOARDING_ROUTE}
           appearance={{
             elements: {
               rootBox: 'w-full max-w-md',

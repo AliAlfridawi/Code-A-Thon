@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from '@clerk/clerk-react';
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
+import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn, useUser } from '@clerk/clerk-react';
 import App from './App';
 import Dashboard from './pages/Dashboard';
 import Pairing from './pages/Pairing';
@@ -20,6 +20,8 @@ import UserDashboard from './pages/UserDashboard';
 import { AdminGuard } from './components/AdminGuard';
 import { SettingsProvider } from './hooks/useSettings';
 import {
+  ADMIN_PAIRING_ROUTE,
+  getDefaultSignedInRoute,
   ONBOARDING_ROUTE,
   SIGN_IN_ROUTE,
   SIGN_UP_ROUTE,
@@ -33,11 +35,30 @@ if (!clerkPubKey) {
   throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY. Check your .env file.');
 }
 
+function DefaultSignedInLanding() {
+  const { user, isLoaded } = useUser();
+
+  if (!isLoaded) {
+    return null;
+  }
+
+  const email = user?.primaryEmailAddress?.emailAddress;
+
+  if (getDefaultSignedInRoute(email) !== '/') {
+    return <Navigate to={getDefaultSignedInRoute(email)} replace />;
+  }
+
+  return <Dashboard />;
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ClerkProvider
       publishableKey={clerkPubKey}
       signUpForceRedirectUrl={ONBOARDING_ROUTE}
+      signUpFallbackRedirectUrl={ONBOARDING_ROUTE}
+      signInForceRedirectUrl={ONBOARDING_ROUTE}
+      signInFallbackRedirectUrl={ONBOARDING_ROUTE}
     >
       <BrowserRouter>
         <Routes>
@@ -79,11 +100,11 @@ createRoot(document.getElementById('root')!).render(
               </>
             }
           >
-            <Route index element={<AdminGuard><Dashboard /></AdminGuard>} />
+            <Route index element={<DefaultSignedInLanding />} />
             <Route path={USER_DASHBOARD_ROUTE_SEGMENT} element={<UserDashboard />} />
             <Route path="pairing" element={<Matching />} />
             <Route path="matching" element={<Matching />} />
-            <Route path="admin-pairing" element={<Pairing />} />
+            <Route path={ADMIN_PAIRING_ROUTE.slice(1)} element={<AdminGuard><Pairing /></AdminGuard>} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="messages" element={<Messages />} />
             <Route path="members" element={<Members />} />

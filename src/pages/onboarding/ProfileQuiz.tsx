@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { useSupabase } from '../../hooks/useSupabase';
 import { markOnboardingComplete } from '../../hooks/useOnboardingStatus';
@@ -12,9 +12,10 @@ interface ProfileQuizProps {
 }
 
 export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const supabase = useSupabase();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: user?.fullName || '',
@@ -31,6 +32,18 @@ export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
 
   const [newTag, setNewTag] = useState('');
   const [newResearch, setNewResearch] = useState('');
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setFormData((current) => ({
+      ...current,
+      name: current.name || user.fullName || '',
+      email: current.email || user.primaryEmailAddress?.emailAddress || '',
+    }));
+  }, [user]);
 
   const addTag = () => {
     if (!newTag.trim()) return;
@@ -60,10 +73,13 @@ export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
     setIsSubmitting(true);
 
     try {
-      if (!user) return;
+      if (!user) {
+        throw new Error('Your account is still loading. Please try again in a moment.');
+      }
 
       const table = role === 'mentor' ? 'mentors' : 'mentees';
       const payload: any = {
@@ -104,11 +120,12 @@ export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
       if (profileError) throw profileError;
 
       // Warm the onboarding cache so the guard doesn't redirect back
-      markOnboardingComplete(role);
+      markOnboardingComplete(user.id, role);
 
       onComplete(payload);
     } catch (err) {
       console.error('Error submitting quiz:', err);
+      setSubmitError(err instanceof Error ? err.message : 'We could not save your profile right now. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -191,7 +208,7 @@ export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
               placeholder={`Add a ${role === 'mentor' ? 'tag' : 'interest'}`}
               value={newTag}
               onChange={e => setNewTag(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
+              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
             />
             <button 
               type="button" 
@@ -221,7 +238,7 @@ export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
               placeholder="Add a research interest"
               value={newResearch}
               onChange={e => setNewResearch(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addResearch())}
+              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addResearch())}
             />
             <button 
               type="button" 
@@ -255,9 +272,15 @@ export function ProfileQuiz({ role, onComplete }: ProfileQuizProps) {
           />
         </div>
 
+        {submitError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {submitError}
+          </div>
+        ) : null}
+
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || !isLoaded || !user}
           className="w-full py-4 bg-primary text-white rounded-xl font-bold text-lg hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
         >
           {isSubmitting ? (

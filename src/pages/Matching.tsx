@@ -31,10 +31,15 @@ export default function Matching() {
 
   useEffect(() => {
     async function fetchMatches() {
+      if (profileLoading) {
+        return;
+      }
+
       if (!profile || !role || !user) {
         return;
       }
 
+      setLoading(true);
       const oppositeTable = role === 'mentor' ? 'mentees' : 'mentors';
       const { data, error } = await supabase.from(oppositeTable).select('*');
 
@@ -51,8 +56,15 @@ export default function Matching() {
       setLoading(false);
     }
 
+    if (!profileLoading && (!profile || !role || !user)) {
+      setMatches([]);
+      setFilteredMatches([]);
+      setLoading(false);
+      return;
+    }
+
     void fetchMatches();
-  }, [profile, role, supabase, user]);
+  }, [profile, profileLoading, role, supabase, user]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {

@@ -7,6 +7,7 @@ import StatCard from '../components/StatCard';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useActivity } from '../hooks/useActivity';
 import { formatDistanceToNow } from '../utils/dateUtils';
+import { ADMIN_PAIRING_ROUTE, MESSAGES_ROUTE, MEMBERS_ROUTE } from '../constants/routes';
 
 // ... (rest of imports)
 
@@ -159,7 +160,7 @@ export default function Dashboard() {
           <h2 className="font-headline font-bold text-lg text-primary mb-6">Quick Actions</h2>
           <div className="space-y-4 flex-1">
             <Link
-              to="/pairing"
+              to={ADMIN_PAIRING_ROUTE}
               className="block p-5 rounded-2xl bg-gradient-to-r from-primary to-primary-container text-white hover:shadow-lg hover:shadow-primary/20 transition-all group"
             >
               <Handshake size={22} className="mb-3 group-hover:scale-110 transition-transform" />
@@ -167,7 +168,7 @@ export default function Dashboard() {
               <p className="text-xs text-white/70 mt-1">Match a mentor with a mentee</p>
             </Link>
             <Link
-              to="/members"
+              to={MEMBERS_ROUTE}
               className="block p-5 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 hover:shadow-md transition-all group"
             >
               <UserPlus size={22} className="mb-3 text-primary group-hover:scale-110 transition-transform" />
@@ -175,7 +176,7 @@ export default function Dashboard() {
               <p className="text-xs text-on-surface-variant mt-1">Register a mentor or mentee</p>
             </Link>
             <Link
-              to="/messages"
+              to={MESSAGES_ROUTE}
               className="block p-5 rounded-2xl bg-surface-container-low border border-outline-variant/10 hover:border-primary/20 hover:shadow-md transition-all group"
             >
               <Activity size={22} className="mb-3 text-primary group-hover:scale-110 transition-transform" />

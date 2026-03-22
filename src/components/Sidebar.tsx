@@ -2,9 +2,8 @@ import { LayoutDashboard, MessageSquare, UserPlus, Users, Settings, HelpCircle, 
 import { NavLink } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useClerk, useUser } from '@clerk/clerk-react';
-import { HELP_ROUTE } from '../constants/routes';
-
-const ADMIN_EMAIL = 'alfridawiali@gmail.com';
+import { clearOnboardingStatusCache } from '../hooks/useOnboardingStatus';
+import { HELP_ROUTE, isAdminEmail, SIGN_IN_ROUTE } from '../constants/routes';
 
 // Admin-only nav items
 const adminNavItems = [
@@ -29,7 +28,7 @@ export default function Sidebar() {
   const { signOut } = useClerk();
   const { user } = useUser();
 
-  const isAdmin = user?.primaryEmailAddress?.emailAddress === ADMIN_EMAIL;
+  const isAdmin = isAdminEmail(user?.primaryEmailAddress?.emailAddress);
   const navItems = isAdmin ? adminNavItems : userNavItems;
 
   return (
@@ -79,7 +78,10 @@ export default function Sidebar() {
           )}
         </NavLink>
         <button
-          onClick={() => signOut()}
+          onClick={() => {
+            clearOnboardingStatusCache();
+            void signOut({ redirectUrl: SIGN_IN_ROUTE });
+          }}
           className="w-full flex items-center gap-3 px-4 py-2 text-error hover:bg-error-container/20 rounded-xl transition-all duration-300"
         >
           <LogOut size={20} />
