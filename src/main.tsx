@@ -18,6 +18,7 @@ import Onboarding from './pages/Onboarding';
 import { OnboardingGuard } from './components/OnboardingGuard';
 import UserDashboard from './pages/UserDashboard';
 import { AdminGuard } from './components/AdminGuard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { SettingsProvider } from './hooks/useSettings';
 import {
   ADMIN_PAIRING_ROUTE,
@@ -53,67 +54,69 @@ function DefaultSignedInLanding() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ClerkProvider
-      publishableKey={clerkPubKey}
-      signUpForceRedirectUrl={ONBOARDING_ROUTE}
-      signUpFallbackRedirectUrl={ONBOARDING_ROUTE}
-      signInForceRedirectUrl={ONBOARDING_ROUTE}
-      signInFallbackRedirectUrl={ONBOARDING_ROUTE}
-    >
-      <BrowserRouter>
-        <Routes>
-          {/* Public auth routes */}
-          <Route path={`${SIGN_IN_ROUTE}/*`} element={<SignInPage />} />
-          <Route path={`${SIGN_UP_ROUTE}/*`} element={<SignUpPage />} />
+    <ErrorBoundary>
+      <ClerkProvider
+        publishableKey={clerkPubKey}
+        signUpForceRedirectUrl={ONBOARDING_ROUTE}
+        signUpFallbackRedirectUrl={ONBOARDING_ROUTE}
+        signInForceRedirectUrl={ONBOARDING_ROUTE}
+        signInFallbackRedirectUrl={ONBOARDING_ROUTE}
+      >
+        <BrowserRouter>
+          <Routes>
+            {/* Public auth routes */}
+            <Route path={`${SIGN_IN_ROUTE}/*`} element={<SignInPage />} />
+            <Route path={`${SIGN_UP_ROUTE}/*`} element={<SignUpPage />} />
 
-          {/* Onboarding route */}
-          <Route
-            path={ONBOARDING_ROUTE}
-            element={
-              <>
-                <SignedIn>
-                  <OnboardingGuard>
-                    <Onboarding />
-                  </OnboardingGuard>
-                </SignedIn>
-                <SignedOut>
-                  <RedirectToSignIn />
-                </SignedOut>
-              </>
-            }
-          />
+            {/* Onboarding route */}
+            <Route
+              path={ONBOARDING_ROUTE}
+              element={
+                <>
+                  <SignedIn>
+                    <OnboardingGuard>
+                      <Onboarding />
+                    </OnboardingGuard>
+                  </SignedIn>
+                  <SignedOut>
+                    <RedirectToSignIn />
+                  </SignedOut>
+                </>
+              }
+            />
 
-          {/* Protected app routes */}
-          <Route
-            element={
-              <>
-                <SignedIn>
-                  <OnboardingGuard>
-                    <SettingsProvider>
-                      <App />
-                    </SettingsProvider>
-                  </OnboardingGuard>
-                </SignedIn>
-                <SignedOut>
-                  <RedirectToSignIn />
-                </SignedOut>
-              </>
-            }
-          >
-            <Route index element={<DefaultSignedInLanding />} />
-            <Route path={USER_DASHBOARD_ROUTE_SEGMENT} element={<UserDashboard />} />
-            <Route path="pairing" element={<Matching />} />
-            <Route path="matching" element={<Matching />} />
-            <Route path={ADMIN_PAIRING_ROUTE.slice(1)} element={<AdminGuard><Pairing /></AdminGuard>} />
-            <Route path="calendar" element={<Calendar />} />
-            <Route path="messages" element={<Messages />} />
-            <Route path="members" element={<Members />} />
-            <Route path="members/:id" element={<MemberProfile />} />
-            <Route path="help" element={<Help />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </ClerkProvider>
+            {/* Protected app routes */}
+            <Route
+              element={
+                <>
+                  <SignedIn>
+                    <OnboardingGuard>
+                      <SettingsProvider>
+                        <App />
+                      </SettingsProvider>
+                    </OnboardingGuard>
+                  </SignedIn>
+                  <SignedOut>
+                    <RedirectToSignIn />
+                  </SignedOut>
+                </>
+              }
+            >
+              <Route index element={<DefaultSignedInLanding />} />
+              <Route path={USER_DASHBOARD_ROUTE_SEGMENT} element={<UserDashboard />} />
+              <Route path="pairing" element={<Matching />} />
+              <Route path="matching" element={<Matching />} />
+              <Route path={ADMIN_PAIRING_ROUTE.slice(1)} element={<AdminGuard><Pairing /></AdminGuard>} />
+              <Route path="calendar" element={<Calendar />} />
+              <Route path="messages" element={<Messages />} />
+              <Route path="members" element={<Members />} />
+              <Route path="members/:id" element={<MemberProfile />} />
+              <Route path="help" element={<Help />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </ClerkProvider>
+    </ErrorBoundary>
   </StrictMode>
 );
